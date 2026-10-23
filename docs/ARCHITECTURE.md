@@ -18,7 +18,7 @@ The native plugin listens for client minimize requests in XDG-shell and XWayland
 
 ## Native motion
 
-The extension animates presented window geometry while keeping the compositor's layout goals and the client surface resolution intact. At the end of minimizing, it masks the move to the hidden workspace to avoid a second fade or a full-size flash. Restoration starts at the actual preview or clicked app icon. Interrupted minimize flights retain their current presented geometry.
+The extension animates presented window geometry while keeping the compositor's layout goals and the client surface resolution intact. Minimize and close share a single departure-geometry helper: the same proportional shrink, size cap and horizontal center, with opposite screen edges. Both use `windowsOut` for geometry and `fadeOut` for opacity, including the configured curves and independent durations. At the end of minimizing, it masks the move to the hidden workspace to avoid a second fade or a full-size flash. Restoration starts at the actual preview or clicked app icon. Interrupted minimize flights retain their current presented geometry.
 
 Closing hooks the compositor's native `CWindowAnimationController::animateOut` context, after the client really closes. The snapshot shrinks upward; the close request itself is not delayed. There is no per-frame renderer hook. The complete ABI hash and the target symbol are checked before hooks are installed, and hooks/listeners are removed on unload.
 

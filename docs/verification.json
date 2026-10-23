@@ -1,6 +1,6 @@
 {
   "date": "2026-10-23",
-  "nativePluginVersion": "1.5",
+  "nativePluginVersion": "1.6",
   "environment": {
     "hyprland": "0.56.2",
     "caelestiaShell": "2.3.0",
@@ -82,5 +82,52 @@
     "fullLogoutLoginAfterUpdate": "not yet repeated",
     "portableStartupRegressionTests": 6,
     "loginImageRegressionTests": 6
+  },
+  "mirroredDeparture": {
+    "passed": true,
+    "geometryAnimation": "windowsOut",
+    "opacityAnimation": "fadeOut",
+    "geometry": "Same close helper, proportional shrink and horizontal center; twelve pixels beyond the opposite monitor edge.",
+    "nativeCases": [
+      {
+        "case": "InverseTiled",
+        "passed": true
+      },
+      {
+        "case": "InverseFloat",
+        "passed": true
+      },
+      {
+        "case": "InverseReduced",
+        "passed": true
+      },
+      {
+        "case": "InverseX11",
+        "passed": true
+      },
+      {
+        "case": "cancel",
+        "passed": true
+      },
+      {
+        "case": "restore",
+        "passed": true
+      },
+      {
+        "case": "close",
+        "passed": true
+      },
+      {
+        "case": "reload",
+        "passed": true
+      }
+    ],
+    "fadeAndTrajectory": {
+      "passed": true,
+      "centerPreserved": true,
+      "aspectRatioPreserved": true,
+      "fadeDuringMotion": true
+    },
+    "screenRecordingUsed": false
   }
 }

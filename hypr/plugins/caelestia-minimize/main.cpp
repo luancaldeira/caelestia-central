@@ -33,6 +33,7 @@ static std::unordered_map<uintptr_t, CHyprSignalListener> listeners;
 struct MinimizeFlight {
     PHLWINDOWREF window;
     PHLANIMVAR<float> progress;
+    PHLANIMVAR<float> fadeProgress;
     Vector2D fromPosition, fromSize, goalPosition, goalSize, toPosition, toSize;
     float fadeGoal = 1.F;
     float fromAlpha = 1.F;
@@ -59,6 +60,19 @@ static std::string normalizedClass(std::string text) {
     return text;
 }
 
+struct DepartureGeometry {
+    Vector2D position, size;
+};
+
+// Minimize and close share the same shrink and horizontal center. Only the
+// screen edge changes; both end twelve logical pixels outside the monitor.
+static DepartureGeometry departureGeometry(PHLMONITOR monitor, const Vector2D& position, const Vector2D& size, bool downward) {
+    const auto scale = std::min({0.16, 160. / std::max(1., size.x), 100. / std::max(1., size.y)});
+    const auto targetSize = (size * scale).clamp({8,8}, size);
+    return {{position.x + (size.x - targetSize.x) / 2.,
+        downward ? monitor->m_position.y + monitor->m_size.y + 12. : monitor->m_position.y - targetSize.y - 12.}, targetSize};
+}
+
 // Retarget the compositor's existing close snapshot. No close request is delayed,
 // no live client is resized, and applications retain their unsaved-work dialogs.
 static Animation::SViewAnimationContext closeUp(const Desktop::View::CWindowAnimationController* controller) {
@@ -70,10 +84,9 @@ static Animation::SViewAnimationContext closeUp(const Desktop::View::CWindowAnim
         if (!monitor || w->m_X11DoesntWantBorders || w->m_ruleApplicator->noAnim().valueOrDefault()) break;
         context.pos.from = w->position(Desktop::View::IGeometric::GEOMETRIC_CURRENT);
         context.size.from = w->size(Desktop::View::IGeometric::GEOMETRIC_CURRENT);
-        const auto scale = std::min({0.16, 160. / std::max(1., context.size.from.x), 100. / std::max(1., context.size.from.y)});
-        context.size.to = (context.size.from * scale).clamp({8,8}, context.size.from);
-        context.pos.to = {context.pos.from.x + (context.size.from.x - context.size.to.x) / 2.,
-            monitor->m_position.y - context.size.to.y - 12.};
+        const auto departure = departureGeometry(monitor, context.pos.from, context.size.from, false);
+        context.size.to = departure.size;
+        context.pos.to = departure.position;
         break;
     }
     return context;
@@ -156,6 +169,8 @@ static void finishFlight(uintptr_t key, bool hide) {
     auto& flight = node.mapped();
     flight.progress->resetAllCallbacks();
     flight.progress->warp();
+    flight.fadeProgress->resetAllCallbacks();
+    flight.fadeProgress->warp();
     const auto window = flight.window.lock();
     if (!window || !window->m_isMapped)
         return;
@@ -283,14 +298,22 @@ static int minimizeTo(lua_State* L) {
         lua_pushboolean(L, true);
         return 1;
     }
+    const auto monitor = window->m_monitor.lock();
+    if (!monitor || window->m_ruleApplicator->noAnim().valueOrDefault()) {
+        lua_pushboolean(L, false);
+        return 1;
+    }
     auto& flight = flights[key];
     flight.window = window;
     flight.fromPosition = position->value();
     flight.fromSize = size->value();
     flight.goalPosition = position->goal();
     flight.goalSize = size->goal();
-    flight.toPosition = Vector2D(values[0], values[1]);
-    flight.toSize = Vector2D(values[2], values[3]);
+    // The legacy hub rectangle remains accepted above for shell compatibility.
+    // Departure now mirrors close instead of shrinking into that rectangle.
+    const auto departure = departureGeometry(monitor, flight.fromPosition, flight.fromSize, true);
+    flight.toPosition = departure.position;
+    flight.toSize = departure.size;
     flight.workspace = window->m_workspace->m_name;
     flight.started = Time::steadyNow();
     auto& fade = window->alpha(Desktop::View::WINDOW_ALPHA_FADE);
@@ -302,7 +325,8 @@ static int minimizeTo(lua_State* L) {
     size->warp();
     position->value() = flight.fromPosition;
     size->value() = flight.fromSize;
-    Animation::mgr()->createAnimation(0.F, flight.progress, position->getConfig().lock(), window, AVARDAMAGE_ENTIRE);
+    Animation::mgr()->createAnimation(0.F, flight.progress, Config::animationTree()->getAnimationPropertyConfig("windowsOut"), window, AVARDAMAGE_ENTIRE);
+    Animation::mgr()->createAnimation(0.F, flight.fadeProgress, Config::animationTree()->getAnimationPropertyConfig("fadeOut"), window, AVARDAMAGE_ENTIRE);
     flight.progress->setUpdateCallback([key](auto) {
         const auto it = flights.find(key);
         if (it == flights.end())
@@ -314,11 +338,18 @@ static int minimizeTo(lua_State* L) {
         const auto progress = std::clamp(f.progress->value(), 0.F, 1.F);
         w->positionAnimation()->value() = f.fromPosition + (f.toPosition - f.fromPosition) * progress;
         w->sizeAnimation()->value() = f.fromSize + (f.toSize - f.fromSize) * progress;
-        const auto fadeProgress = std::clamp((progress - 0.72F) / 0.28F, 0.F, 1.F);
-        w->alpha(Desktop::View::WINDOW_ALPHA_FADE)->value() = f.fromAlpha * (1.F - fadeProgress * fadeProgress * (3.F - 2.F * fadeProgress));
         w->updateWindowDecos();
     });
+    flight.fadeProgress->setUpdateCallback([key](auto) {
+        const auto it = flights.find(key);
+        if (it == flights.end()) return;
+        auto& f = it->second;
+        const auto w = f.window.lock();
+        if (stillOwnsGeometry(f, w))
+            w->alpha(Desktop::View::WINDOW_ALPHA_FADE)->value() = f.fromAlpha * (1.F - std::clamp(f.fadeProgress->value(), 0.F, 1.F));
+    });
     *flight.progress = 1.F;
+    *flight.fadeProgress = 1.F;
     flightTimer->updateTimeout(std::chrono::milliseconds(8));
     lua_pushboolean(L, true);
     return 1;
@@ -430,14 +461,8 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
             if (!stillOwnsGeometry(flight, window))
                 finished.emplace_back(key, false);
             else {
-                // A spring can keep settling after the presented rectangle has
-                // arrived. Finish at pixel precision rather than displaying a
-                // stationary thumbnail while waiting for its mathematical tail.
-                const auto distance = std::max({std::abs(flight.toPosition.x - flight.fromPosition.x),
-                    std::abs(flight.toPosition.y - flight.fromPosition.y), std::abs(flight.toSize.x - flight.fromSize.x),
-                    std::abs(flight.toSize.y - flight.fromSize.y)});
-                const bool arrived = flight.progress->value() > 0.9F && distance * (1.F - flight.progress->value()) <= 1.;
-                if (arrived || !flight.progress->isBeingAnimated() || Time::steadyNow() - flight.started > std::chrono::seconds(2))
+                // Match native close's independent geometry and opacity clocks.
+                if ((!flight.progress->isBeingAnimated() && !flight.fadeProgress->isBeingAnimated()) || Time::steadyNow() - flight.started > std::chrono::seconds(2))
                     finished.emplace_back(key, true);
             }
         }
@@ -455,12 +480,14 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
         if (!flight.empty()) {
             flight.mapped().progress->resetAllCallbacks();
             flight.mapped().progress->warp();
+            flight.mapped().fadeProgress->resetAllCallbacks();
+            flight.mapped().fadeProgress->warp();
         }
         listeners.erase(reinterpret_cast<uintptr_t>(w.get()));
     });
     for (const auto& w : Desktop::windowState()->windows())
         observe(w);
-    return {"caelestia-minimize", "Native minimize and restore flights for the Caelestia hub", "luancaldeira", "1.5"};
+    return {"caelestia-minimize", "Native minimize and restore flights for the Caelestia hub", "luancaldeira", "1.6"};
 }
 
 APICALL EXPORT void PLUGIN_EXIT() {

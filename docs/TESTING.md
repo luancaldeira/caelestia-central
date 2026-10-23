@@ -33,7 +33,7 @@ The original regression was reproduced before the fix: after all three windows w
 Check these behaviors visually when changing native motion or the central:
 
 - Favorite icon launch starts at the clicked 32 px icon; existing apps are reused.
-- Minimize shrinks downward into the preview without a lingering frame or flash at full size.
+- Minimize mirrors the upward close motion toward the bottom edge, with the same scale, `windowsOut` geometry timing and `fadeOut` opacity timing, without a lingering frame or flash at full size.
 - Restore grows from the preview and leaves the hub and pointer available for another restore.
 - Closing a visible app shrinks upward; application close confirmation remains functional.
 - The queue works with one, two and three windows, stable identities, and direction reversal.
