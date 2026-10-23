@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 """Public entry point used by Hyprland, the desktop launcher and the picker."""
 import argparse
+from datetime import datetime
+import fcntl
 import json
 import os
 import signal
@@ -28,18 +30,18 @@ def call(request):
     return result.get("data")
 
 
-def ensure_service(restart=False):
+def ensure_service(restart=False, ready=False):
     names = [name for name in ("WAYLAND_DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE", "DISPLAY",
                                "XDG_CURRENT_DESKTOP", "XDG_SESSION_TYPE", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS") if name in os.environ]
     subprocess.run(["systemctl", "--user", "import-environment", *names], check=True)
-    if restart:
-        subprocess.run(["systemctl", "--user", "reset-failed", "wallpaperengine.service"], check=True)
+    # restart also starts an inactive/unloaded unit. reset-failed would fail on
+    # a fresh login before systemd has loaded this linked service, aborting boot.
     subprocess.run(["systemctl", "--user", "restart" if restart else "start", "wallpaperengine.service"], check=True)
-    deadline = time.monotonic() + (120 if restart else 12)
+    deadline = time.monotonic() + (120 if restart or ready else 12)
     while time.monotonic() < deadline:
         try:
             status = call({"action": "status"})
-            if not restart or (status.get("running") and not status.get("busy")):
+            if not (restart or ready) or (status.get("running") and not status.get("busy")):
                 return status
             if status.get("error") and not status.get("busy"):
                 raise RuntimeError(status["error"])
@@ -47,6 +49,61 @@ def ensure_service(restart=False):
             pass
         time.sleep(.2)
     raise RuntimeError("The controller did not start. Check journalctl --user -u wallpaperengine.service.")
+
+
+def wait_for_compositor(signature, timeout=90, interval=.25):
+    """Return this instance's display once its IPC, socket and monitor exist."""
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            instances = subprocess.run(["hyprctl", "instances", "-j"], capture_output=True,
+                                       text=True, timeout=3, check=True)
+            instance = next((i for i in json.loads(instances.stdout) if i.get("instance") == signature), None)
+            display = instance.get("wl_socket", "") if instance else ""
+            if display and (RUNTIME / display).exists():
+                monitors = subprocess.run(["hyprctl", "-i", signature, "monitors", "-j"],
+                                          capture_output=True, text=True, timeout=3, check=True)
+                if any(not m.get("disabled") and m.get("width", 0) > 0 and m.get("height", 0) > 0
+                       for m in json.loads(monitors.stdout)):
+                    return display
+        except (OSError, ValueError, subprocess.SubprocessError):
+            pass
+        if time.monotonic() >= deadline:
+            raise RuntimeError("The Hyprland instance did not become ready for wallpaper startup.")
+        time.sleep(interval)
+
+
+def session():
+    """Restore once per live compositor, including its initial config load."""
+    signature = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", "")
+    if not signature:
+        raise RuntimeError("No Hyprland instance was supplied by the session.")
+    logpath = STATE / "logs/session.log"
+    logpath.parent.mkdir(parents=True, exist_ok=True)
+    with logpath.open("a", buffering=1) as log, (RUNTIME / "wallpaperengine-session.lock").open("w") as lock:
+        def record(message):
+            log.write(f"{datetime.now().astimezone().isoformat(timespec='seconds')} {signature}: {message}\n")
+        record("startup requested")
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            # config.reloaded also fires before the compositor creates its IPC
+            # and Wayland sockets. Resolve this instance's actual display only
+            # after both are ready, instead of importing the previous login's env.
+            display = wait_for_compositor(signature)
+            os.environ["WAYLAND_DISPLAY"] = display
+            try:
+                status = call({"action": "status"})
+            except (OSError, ValueError):
+                status = {}
+            restart = (status.get("session") != signature or status.get("wayland_display") != display
+                       or (not status.get("running") and not status.get("busy")))
+            record("restoring service" if restart else "service already belongs to this session")
+            status = ensure_service(restart=restart, ready=True)
+            record(f"renderer ready; service_pid={status.get('service_pid')}; display={display}")
+            return status
+        except Exception as error:
+            record(f"startup failed: {error}")
+            raise
 
 
 def ui(rofi=False):
@@ -112,7 +169,7 @@ def main():
         serve()
         return
     if args.action == "session":
-        ensure_service(restart=True)
+        session()
         return
     if args.action == "scan":
         print(json.dumps(scan(), ensure_ascii=False))

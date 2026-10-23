@@ -23,5 +23,9 @@ jobs:
         run: python -m unittest discover -s wallpaperengine/tests -p test_library_sync.py -v
       - name: Wallpaper transition lifecycle tests
         run: python -m unittest discover -s wallpaperengine/tests -p test_transition.py -v
+      - name: Session startup regressions
+        run: python -m unittest discover -s wallpaperengine/tests -p test_session.py -v
+      - name: High-resolution login image regressions
+        run: python -m unittest discover -s wallpaperengine/tests -p test_login_wallpaper.py -v
       # Full palette tests require an installed Caelestia CLI and its Python
       # dependencies. Native motion tests additionally require the target desktop.

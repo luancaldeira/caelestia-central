@@ -18,11 +18,14 @@ hl.bind("SUPER + SHIFT + W", hl.dsp.exec_cmd(wallpaper .. " random"), {
 hl.bind("SUPER + CTRL + W", hl.dsp.exec_cmd(wallpaper .. " next"), {
     description = "Apply the next Steam wallpaper",
 })
-hl.on("hyprland.start", function()
+local function startCentral()
     hl.exec_cmd('"' .. loader .. '"')
+    -- The bootstrap waits for this compositor's IPC and is idempotent across
+    -- the initial config load, compositor start, and later config reloads.
     hl.exec_cmd(wallpaper .. " session")
-end)
-hl.on("config.reloaded", function() hl.exec_cmd('"' .. loader .. '"') end)
+end
+hl.on("hyprland.start", startCentral)
+hl.on("config.reloaded", startCentral)
 hl.workspace_rule({ workspace = "special:caelestia-minimized", gaps_in = 0, gaps_out = 0 })
 
 -- Give apps without their own decoration a native minimize button when available.

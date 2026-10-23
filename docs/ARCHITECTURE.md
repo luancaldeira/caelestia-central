@@ -28,6 +28,10 @@ Closing hooks the compositor's native `CWindowAnimationController::animateOut` c
 
 `controller.py` serializes renderer changes, preserves the latest requested selection, and handles recovery. `palette.py` generates Material color roles through the Caelestia Python utilities and writes only the shell's scheme state. Legacy serialized intensity identifiers are retained for preference compatibility; all displayed labels are English.
 
+The CLI bootstrap serializes compositor startup hooks, waits for that instance's actual display and monitors, and compares its identity with the running controller. Starting an unloaded unit works without resetting a nonexistent failure state. A new graphical session restarts the previous controller; reloading configuration in the same session preserves it.
+
+Display stills are independent of palette samples. A background task prepares the selected wallpaper's native frame and upgrades a delayed scene capture. It checks the selection generation before publishing, so older work cannot overwrite a newer wallpaper. `greeter.py` optionally publishes the image and scheme into a stable shared directory as the desktop user. The optional system installer changes only a compatible greetd greeter's root-owned profile URLs; it does not give a root process arbitrary user-supplied image paths to read on change notifications.
+
 `transition.py` prepares a private runtime capture of the previous desktop while the new wallpaper and colors become ready. `WallpaperTransition.qml` and `modules/wallpaper/splash.frag` reveal the new live scene through a soft circular mask. The overlay receives no pointer/keyboard input and has a timeout, lock/workspace cancellation, and capture cleanup. Captures are temporary runtime data, not library items.
 
 Only Steam Workshop Wallpaper Engine projects are indexed. No arbitrary local-image/video importer exists yet. The rendering engine and Workshop assets remain separate dependencies.

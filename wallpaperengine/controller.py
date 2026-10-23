@@ -12,9 +12,10 @@ import subprocess
 import time
 from pathlib import Path
 
-from catalog import CACHE, STATE, RUNTIME, atomic, load, scan
+from catalog import CACHE, CONFIG, STATE, RUNTIME, atomic, load, scan
 import palette
 import previews
+import greeter
 from transition import Transition
 
 SOCKET = RUNTIME / "wallpaperengine.sock"
@@ -108,6 +109,7 @@ class Controller:
         self.watch_fd = None
         self.refresh_timer = None
         self.poster_task = None
+        self.login_task = None
         self.transition_tasks = set()
         self.held_transition = None
         self.last_switch = {}
@@ -159,6 +161,48 @@ class Controller:
     def item(self, ident):
         return next((i for i in self.catalog["items"] if i["id"] == str(ident)), None)
 
+    def login_source(self, item, theme):
+        return (previews.cached_login_wallpaper(item, CACHE)
+                or previews.cached(item, CACHE).get("displayPreview") or theme["poster"])
+
+    def queue_login_wallpaper(self, item, generation):
+        if self.login_task:
+            self.login_task.cancel()
+        self.login_task = asyncio.create_task(self.update_login_wallpaper(dict(item), generation))
+
+    def export_greeter(self, source):
+        try:
+            greeter.export(source, self.theme.get("scheme"), load(CONFIG / "settings.json", {}))
+        except Exception:
+            LOG.exception("Could not export the login wallpaper")
+
+    async def update_login_wallpaper(self, item, generation):
+        """Prepare outside the transition, then upgrade once a scene capture arrives."""
+        def current():
+            return (not self.closing.is_set() and generation == self.generation
+                    and self.rendered == item["id"])
+        capture = CACHE / "renders" / f'{item["id"]}-{item["signature"]}.png'
+        had_capture = capture.is_file()
+        try:
+            source = await asyncio.to_thread(previews.prepare_login_wallpaper, item, CACHE)
+            if not current():
+                return
+            palette.apply_wallpaper_source(source)
+            self.export_greeter(source)
+            # The renderer writes a scene capture after its first presentation
+            # frames. Do not leave the initial thumbnail as the next login image.
+            if item["type"] == "scene" and not had_capture:
+                deadline = time.monotonic() + 60
+                while current() and not capture.is_file() and time.monotonic() < deadline:
+                    await asyncio.sleep(.25)
+                if current() and capture.is_file():
+                    source = await asyncio.to_thread(previews.prepare_login_wallpaper, item, CACHE)
+                    if current():
+                        palette.apply_wallpaper_source(source)
+                        self.export_greeter(source)
+        except Exception:
+            LOG.exception("Could not prepare the login wallpaper for %s", item["id"])
+
     def persist(self):
         atomic(STATE / "selection.json", self.data)
 
@@ -176,6 +220,8 @@ class Controller:
             "monitor": self.monitor, "theme": self.theme, "preview": self.preview,
             "preferences": self.data["preferences"], "assets": self.catalog["assets"],
             "updated": time.time(), "service_pid": os.getpid(),
+            "session": os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", ""),
+            "wayland_display": os.environ.get("WAYLAND_DISPLAY", ""),
             "lastSwitch": self.last_switch,
         })
 
@@ -323,7 +369,7 @@ class Controller:
                 try:
                     if palette_error:
                         raise palette_error
-                    palette.apply(result)
+                    palette.apply(result, self.login_source(item, result))
                     self.theme = result
                     atomic(STATE / "themes" / f'{item["id"]}.json', result)
                     atomic(STATE / "active-theme.json", result)
@@ -339,6 +385,7 @@ class Controller:
                     self.message = item["title"]
                 timing["readyMs"] = round((time.monotonic() - switch_start) * 1000)
                 self.last_switch = timing
+                self.queue_login_wallpaper(item, generation)
             except Exception as e:
                 LOG.exception("Wallpaper switch failed")
                 self.error = str(e)
@@ -500,8 +547,16 @@ class Controller:
             if not previous:
                 raise ValueError("No previous palette has been saved.")
             result = {**self.theme, "scheme": previous, "source": "previous palette"}
-            palette.apply(result)
+            item = self.item(self.rendered or self.data.get("active", ""))
+            try:
+                source = (STATE.parent / "caelestia/wallpaper/path.txt").read_text().strip()
+            except OSError:
+                source = ""
+            source = (source if source and Path(source).is_file()
+                      else self.login_source(item, result) if item else result["poster"])
+            palette.apply(result, source)
             self.theme = result
+            self.export_greeter(source)
             atomic(STATE / "active-theme.json", result)
             if self.rendered:
                 atomic(STATE / "themes" / f"{self.rendered}.json", result)
@@ -613,6 +668,9 @@ class Controller:
             if self.poster_task:
                 self.poster_task.cancel()
                 await asyncio.gather(self.poster_task, return_exceptions=True)
+            if self.login_task:
+                self.login_task.cancel()
+                await asyncio.gather(self.login_task, return_exceptions=True)
             for task in self.transition_tasks:
                 task.cancel()
             await asyncio.gather(*self.transition_tasks, return_exceptions=True)

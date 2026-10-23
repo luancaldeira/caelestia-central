@@ -13,6 +13,7 @@ A compact bottom-edge hub for favorite apps, minimized windows, and Steam Worksh
 - Minimize buttons and **Super+M** send windows into the hub. Closing a minimized window closes only that window. Other minimized windows remain hidden, including when an X11 toolkit updates their state after a sibling closes.
 - **Wallpapers** uses a rectangular Cover Flow carousel with perspective and reflections. Right-click to favorite; favorites appear first the next time the library opens.
 - Wallpaper changes reveal the live wallpaper and the new shell colors through a soft circular splash originating at the pointer. Scene captures and video frames improve carousel preview quality.
+- The saved wallpaper starts with the graphical session without opening the hub. Login backgrounds use a separate full-size still; compatible Caelestia greetd installations can opt into a persistent public export.
 - Closing a visible application shrinks it upward, visually distinguishing closing from minimizing downward into the hub.
 
 ## Wallpaper integration and current limitation
