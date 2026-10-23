@@ -16,7 +16,7 @@ The wallpaper carousel keeps its final screen-bounded dimensions inside a clippe
 
 The native plugin listens for client minimize requests in XDG-shell and XWayland. Each optional request is **consumed once**. In Hyprland 0.56.2, XWayland retains `requestsMinimize` while its shared `stateChanged` signal also reports unrelated fullscreen/maximize updates. Re-emitting that retained value could replay an old restore request for minimized siblings. Version 1.5 clears the request after reading it. Explicit subsequent restore requests still work.
 
-`WindowStack.qml` holds stable address/PID identities, freezes outgoing cards during removal, and captures the pressed entry before a close/restore gesture. The queue has bounded, rate-limited wheel movement suitable for a small number of windows. Restoring from the hub targets the current workspace and retains the layer surface and pointer, allowing successive restores.
+`WindowStack.qml` holds stable address/PID identities, freezes outgoing cards during removal, and captures the pressed entry before a close/restore gesture. The horizontal list opens at its middle entry and has bounded, rate-limited wheel movement suitable for a small number of windows. Adjacent previews remain partially visible at the left and right edges; cards translate along a straight track without rotation or wraparound. Restoring from the hub targets the current workspace and retains the layer surface and pointer, allowing successive restores.
 
 ## Native motion
 

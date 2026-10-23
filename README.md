@@ -9,7 +9,7 @@ A compact bottom-edge hub for favorite apps, minimized windows, and Steam Worksh
 - Hover over the bottom center to reveal a small row of favorite application icons.
 - Click the handle beneath the icons to slide into **Apps / Windows / Wallpapers**. The transition uses the same expressive `Anim` curve as Caelestia's dashboard and can reverse while moving.
 - **Apps** opens Caelestia's native launcher. Clicking a favorite launches its window from the icon, or brings back an existing window without launching a duplicate.
-- **Windows** keeps minimized windows in a compact, scrollable queue. The front card slides aside as you scroll; restoring a window grows it from its preview and keeps the hub open for another selection.
+- **Windows** shows minimized windows in a compact, finite horizontal list. It opens at the middle preview, with neighboring cards peeking in at the edges. Scroll in either direction; the ends do not wrap. Restoring a window grows it from its preview and keeps the hub open for another selection.
 - Minimize buttons and **Super+M** send windows into the hub. Closing a minimized window closes only that window. Other minimized windows remain hidden, including when an X11 toolkit updates their state after a sibling closes.
 - **Wallpapers** uses a rectangular Cover Flow carousel with perspective and reflections. Right-click to favorite; favorites appear first the next time the library opens.
 - Wallpaper changes reveal the live wallpaper and the new shell colors through a soft circular splash originating at the pointer. Scene captures and video frames improve carousel preview quality.

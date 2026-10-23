@@ -36,7 +36,7 @@ Check these behaviors visually when changing native motion or the central:
 - Minimize mirrors the upward close motion toward the bottom edge, with the same scale, `windowsOut` geometry timing and `fadeOut` opacity timing, without a lingering frame or flash at full size.
 - Restore grows from the preview and leaves the hub and pointer available for another restore.
 - Closing a visible app shrinks upward; application close confirmation remains functional.
-- The queue works with one, two and three windows, stable identities, and direction reversal.
+- The finite window list opens at its middle entry, exposes adjacent previews at the edges, stops at both ends, and reverses smoothly while keeping stable window identities.
 - The bottom handle moves between icons and options with native dashboard easing, a small overshoot, and interruption from the current position.
 - Wallpaper favorites retain browsing order, subscriptions synchronize, and posters use the best available cached source.
 - The splash reveals the new live wallpaper and shell palette, cancels on workspace/lock changes, cleans up captures, and still runs after unlock.

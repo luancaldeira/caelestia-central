@@ -28,8 +28,10 @@ Item {
     readonly property var currentEntry: currentIndex >= 0 ? items[currentIndex] : null
     readonly property int position: currentIndex + 1
     readonly property int animatedCount: cards.count
-    readonly property real coverWidth: Math.max(80,width - 40)
+    readonly property real sideInset: 56
+    readonly property real coverWidth: Math.max(80,width - sideInset * 2)
     readonly property real coverHeight: Math.max(48,Math.min(coverWidth * 9 / 16,height - 16))
+    readonly property real cardStep: coverWidth + 14
     readonly property bool settled: currentIndex >= 0 && Math.abs(phase - currentIndex) < 0.035
     signal activated(var entry, var origin)
     signal secondaryTriggered(var entry)
@@ -93,7 +95,8 @@ Item {
     function resetOrder() {
         reindexing = true;
         sync();
-        selectedUid = key(items[0]);
+        // Start in the middle of a bounded list, with context on both sides.
+        selectedUid = key(items[Math.floor(Math.max(0,items.length - 1) / 2)]);
         phase = Math.max(0,currentIndex);
         reveal = 1;
         wheelRemainder = 0;
@@ -132,7 +135,7 @@ Item {
         const rendered = [];
         for (let i = 0; i < cards.count; ++i) {
             const c = scene.itemAt(i);
-            if (c && c.opacity > 0.01) rendered.push({uid:c.uid,x:c.x,y:c.y,opacity:c.opacity,leaving:c.leaving});
+            if (c && c.opacity > 0.01) rendered.push({uid:c.uid,x:c.x,y:c.y,width:c.width,height:c.height,offset:c.offset,selected:c.selected,opacity:c.opacity,leaving:c.leaving});
         }
         return {phase:phase,index:currentIndex,settled:settled,rendered:rendered};
     }
@@ -168,18 +171,17 @@ Item {
             required property bool leaving
             required property var frozen
             readonly property real offset: slot - root.phase
-            readonly property real ahead: Math.max(0,Math.min(1,-offset))
-            readonly property real behind: Math.max(0,Math.min(1,offset))
+            readonly property real distance: Math.abs(offset)
             readonly property bool selected: uid === root.selectedUid
             property real dismissal: leaving ? 1 : 0
             width: root.coverWidth; height: root.coverHeight
-            x: leaving ? frozen.x : (root.width - width) / 2 - ahead * (width * 0.72 + 16)
-            y: leaving ? frozen.y - dismissal * 6 : 8 + behind * 4
-            scale: leaving ? frozen.scale * (1 - dismissal * 0.025) : (1 - behind * 0.025) * (selected ? 0.985 + 0.015 * root.reveal : 1)
-            rotation: leaving ? frozen.rotation : -4 * ahead
-            opacity: leaving ? frozen.opacity * (1 - dismissal) : (1 - Math.max(ahead,behind)) * (selected ? root.reveal : 1)
+            x: leaving ? frozen.x : (root.width - width) / 2 + offset * root.cardStep
+            y: leaving ? frozen.y - dismissal * 6 : 8
+            scale: leaving ? frozen.scale * (1 - dismissal * 0.025) : (1 - Math.min(1,distance) * 0.035) * (selected ? 0.985 + 0.015 * root.reveal : 1)
+            rotation: leaving ? frozen.rotation : 0
+            opacity: leaving ? frozen.opacity * (1 - dismissal) : Math.max(0,Math.min(1,2 - distance)) * (1 - Math.min(1,distance) * 0.28) * (selected ? root.reveal : 1)
             visible: opacity > 0.001
-            z: leaving ? 200 : offset < 0 ? 150 : 100 - behind
+            z: leaving ? 200 : 100 - distance
             function snapshot() { return {x:x,y:y,scale:scale,opacity:opacity,rotation:rotation}; }
             Behavior on dismissal { NumberAnimation { duration: 230; easing.type: Easing.OutCubic } }
             ClippingRectangle {

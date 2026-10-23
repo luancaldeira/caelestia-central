@@ -81,7 +81,7 @@ Item {
     function minimizeTarget() {
         const bottom = mapToItem(null,width / 2,height);
         const panelHeight = Math.min(windowPanelHeight,screen.height - 160);
-        const coverWidth = Math.max(80,Math.min(windowPanelWidth,screen.width - 100) - 40);
+        const coverWidth = Math.max(80,Math.min(windowPanelWidth,screen.width - 100) - windows.sideInset * 2);
         return {x:screen.x + bottom.x - coverWidth / 2,
             y:screen.y + bottom.y - (implicitHeight + 5) * offsetScale - panelHeight + 20,
             width:coverWidth,height:Math.max(48,Math.min(coverWidth * 9 / 16,panelHeight - 148))};

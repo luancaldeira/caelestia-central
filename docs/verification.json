@@ -151,5 +151,67 @@
     ],
     "coverDimensionsConstantThroughoutPanelResize": true,
     "screenRecordingUsed": false
+  },
+  "linearWindowList": {
+    "passed": true,
+    "startsAtMiddle": true,
+    "adjacentPreviewsPeekAtBothEdges": true,
+    "leftAndRightLimitsDoNotWrap": true,
+    "actualWheelBothDirections": true,
+    "closeIsolation": {
+      "passed": true,
+      "cases": [
+        {
+          "backend": "x11",
+          "action": "close Beta",
+          "veto": true,
+          "remaining": 3,
+          "othersStayedMinimized": true,
+          "hubStayedOpen": true
+        },
+        {
+          "backend": "x11",
+          "action": "close Alpha",
+          "veto": false,
+          "remaining": 2,
+          "othersStayedMinimized": true,
+          "hubStayedOpen": true
+        },
+        {
+          "backend": "x11",
+          "action": "close Gamma",
+          "veto": false,
+          "remaining": 1,
+          "othersStayedMinimized": true,
+          "hubStayedOpen": true
+        },
+        {
+          "backend": "wayland",
+          "action": "close Beta",
+          "veto": true,
+          "remaining": 3,
+          "othersStayedMinimized": true,
+          "hubStayedOpen": true
+        },
+        {
+          "backend": "wayland",
+          "action": "close Alpha",
+          "veto": false,
+          "remaining": 2,
+          "othersStayedMinimized": true,
+          "hubStayedOpen": true
+        },
+        {
+          "backend": "wayland",
+          "action": "close Gamma",
+          "veto": false,
+          "remaining": 1,
+          "othersStayedMinimized": true,
+          "hubStayedOpen": true
+        }
+      ]
+    },
+    "existingUserWindowsPreserved": true,
+    "screenRecordingUsed": false
   }
 }
