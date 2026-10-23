@@ -35,7 +35,10 @@ Item {
     focus: shouldBeActive
     Behavior on offsetScale { Anim {} }
     Behavior on implicitWidth { Anim {} }
-    Behavior on implicitHeight { Anim {} }
+    Behavior on implicitHeight {
+        onTargetValueChanged: panelHeightMotion.type = root.activeTab === 1 && windows.animatedCount === 0 ? Anim.Emphasized : Anim.DefaultSpatial
+        Anim { id: panelHeightMotion }
+    }
 
     function setTab(index) {
         screenState.minimizedTab = Math.max(0,Math.min(2,index));
@@ -85,6 +88,7 @@ Item {
         return JSON.stringify({open:shouldBeActive,tab:activeTab,width:width,height:height,count:count,
             selected:activeTab === 1 ? currentEntry?.address : currentEntry?.id,
             rendered:activeTab === 0 ? count : activeCarousel.animatedCount,menuOpen:menuOpen,
+            emptyMotion:{opacity:emptyState.opacity,reveal:emptyState.reveal,type:panelHeightMotion.type,duration:panelHeightMotion.duration},
             appsView:"mini",launcher:screenState.launcher,icons:miniHub.entries.map(entry => entry.id),
             handle:handle.mapToItem(null,handle.width/2,handle.height/2),
             mini:miniHub.mapToItem(null,0,0),compactWidth:compactWidth,compactHeight:compactHeight,
@@ -238,11 +242,21 @@ Item {
         onSecondaryTriggered: entry => WallpaperLibrary.favorite(entry.id)
     }
     Column {
+        id: emptyState
+        readonly property bool shown: root.activeTab === 1 && windows.animatedCount === 0 && compactViewport.y + options.y >= height + 8
+        property real reveal: shown ? 1 : 0
         anchors.horizontalCenter: parent.horizontalCenter
         y: root.activeTab === 1 ? (compactViewport.y + options.y - height) / 2 : (parent.height - height) / 2
         width: parent.width - 48
         spacing: 12
-        visible: root.activeTab !== 0 && root.activeCarousel.animatedCount === 0
+        // Let the panel make room before revealing the empty state above its menu.
+        opacity: root.activeTab === 1 ? reveal : 1
+        visible: root.activeTab === 1 ? opacity > 0 : root.activeTab === 2 && wallpapers.animatedCount === 0
+        scale: root.activeTab === 1 ? 0.985 + 0.015 * reveal : 1
+        transform: Translate { y: root.activeTab === 1 ? 6 * (1 - emptyState.reveal) : 0 }
+        Behavior on reveal {
+            Anim { type: Anim.SlowEffects }
+        }
         MaterialIcon {
             anchors.horizontalCenter: parent.horizontalCenter
             text: root.activeTab === 1 ? "desktop_windows" : "wallpaper"

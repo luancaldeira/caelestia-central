@@ -129,5 +129,14 @@
       "fadeDuringMotion": true
     },
     "screenRecordingUsed": false
+  },
+  "emptyWindowTransition": {
+    "passed": true,
+    "panelHeightDurationMs": 400,
+    "emptyStateFadeDurationMs": 300,
+    "resizeOvershoot": false,
+    "contentWaitsForPanelSpace": true,
+    "smallVerticalReveal": true,
+    "screenRecordingUsed": false
   }
 }
