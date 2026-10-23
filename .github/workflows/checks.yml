@@ -11,6 +11,10 @@ jobs:
         with:
           python-version: '3.13'
       - run: python -m pip install Pillow
+      - name: Install preview test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg liblz4-1
       - name: Compile Python sources
         run: python -m compileall -q scripts tests wallpaperengine
       - name: Installation snapshot tests
