@@ -153,17 +153,24 @@ def cached_theme(item, aspect, prefs, force=False, rendered=None):
     return result
 
 
-def apply(theme):
+def apply_wallpaper_source(wallpaper_source):
+    """Publish the display image without changing its independently sampled colours."""
+    target = STATE.parent / "caelestia"
+    wallpaper_source = str(wallpaper_source)
+    atomic(target / "wallpaper/path.txt", wallpaper_source)
+    for name in ("current", "thumbnail.jpg"):
+        path = target / "wallpaper" / name
+        tmp = path.with_name(name + ".wpe-tmp")
+        tmp.unlink(missing_ok=True)
+        tmp.symlink_to(wallpaper_source)
+        tmp.replace(path)
+
+
+def apply(theme, wallpaper_source=None):
     """Only the shell's state/thumbnail. Do not call Caelestia's global writers."""
     target = STATE.parent / "caelestia"
     old = load(target / "scheme.json")
     if old and old != theme["scheme"]:
         atomic(STATE / "previous-scheme.json", old)
-    atomic(target / "wallpaper/path.txt", theme["poster"])
-    for name in ("current", "thumbnail.jpg"):
-        path = target / "wallpaper" / name
-        tmp = path.with_name(name + ".wpe-tmp")
-        tmp.unlink(missing_ok=True)
-        tmp.symlink_to(theme["poster"])
-        tmp.replace(path)
+    apply_wallpaper_source(wallpaper_source or theme["poster"])
     atomic(target / "scheme.json", theme["scheme"])

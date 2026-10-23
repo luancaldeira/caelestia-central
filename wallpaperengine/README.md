@@ -18,6 +18,10 @@ journalctl --user -u wallpaperengine.service
 
 The controller maintains one managed renderer, detects library changes, restores the saved selection at session startup, and recovers from temporary renderer failures. Workshop content and Wallpaper Engine assets must already exist in your Steam libraries. Compatibility depends on the renderer; automatic selection excludes web wallpapers.
 
+`wallpaperctl session` waits for the current Hyprland instance's IPC, Wayland socket and monitor before importing its display into the user service. Initial configuration load and compositor start can both invoke it: a session lock and controller identity prevent duplicate restarts. It starts unloaded units directly rather than treating `reset-failed` as a prerequisite. Bootstrap diagnostics are recorded under `~/.local/state/wallpaperengine/logs/session.log`.
+
+Colour sampling remains small and cached. A separate still, capped at 2560×1440 without upscaling, supplies the shell's wallpaper source and optional login export. Its preparation runs outside the live wallpaper transition; delayed scene captures upgrade the initial preview, and superseded decodes cannot publish an old selection. See [optional greeter export](../docs/INSTALLATION.md#optional-caelestia-greetd-export).
+
 Color generation uses actual video samples or rendered scene captures when available, with Workshop previews as fallback. It writes Caelestia shell color roles without applying a global application theme. Poster preparation is cached separately from palette generation.
 
 The circular splash uses a short-lived private runtime capture, a GPU shader, cancellation on workspace/lock changes, and a safety timeout. It reveals the live background and newly themed UI in the same region. Reduced motion uses a short fade. Settings and runtime paths are documented in the installation guide.

@@ -219,3 +219,85 @@ def prepare(item, cache):
               "previewWidth": image.width, "previewHeight": image.height}
     atomic(prefix.with_suffix(".json"), result)
     return result
+
+
+def login_key(item, cache, rendered=None):
+    cache = Path(cache)
+    if rendered is None:
+        candidate = cache / "renders" / f'{item["id"]}-{item["signature"]}.png'
+        rendered = candidate if candidate.is_file() else None
+    stamp = None
+    if rendered:
+        try:
+            stat = Path(rendered).stat()
+            stamp = (stat.st_size, stat.st_mtime_ns)
+        except OSError:
+            rendered = None
+    digest = hashlib.sha256(repr((1, item["signature"], stamp)).encode()).hexdigest()[:24]
+    target = cache / "login" / f'{item["id"]}-{digest}.jpg'
+    return target, rendered
+
+
+def cached_login_wallpaper(item, cache):
+    target, _ = login_key(item, cache)
+    try:
+        return str(target) if target.is_file() and target.stat().st_size else None
+    except OSError:
+        return None
+
+
+def prepare_login_wallpaper(item, cache, rendered=None):
+    """Cache a display-resolution still, independent of the colour sample."""
+    cache = Path(cache)
+    target, rendered = login_key(item, cache, rendered)
+    if target.is_file() and target.stat().st_size:
+        return str(target)
+
+    image = None
+    try:
+        if rendered:
+            with Image.open(rendered) as opened:
+                image = opened.convert("RGB")
+        elif item.get("type") == "video" and item.get("file"):
+            probe = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "json", item["file"]],
+                capture_output=True, text=True, timeout=8, check=True,
+            )
+            duration = float(json.loads(probe.stdout)["format"]["duration"])
+            frame = subprocess.run(
+                ["ffmpeg", "-nostdin", "-v", "error", "-threads", "2", "-ss",
+                 str(max(0, duration * .17)), "-i", item["file"], "-frames:v", "1",
+                 "-vf", "scale='min(2560,iw)':-2", "-threads", "2", "-f", "image2pipe",
+                 "-vcodec", "png", "pipe:1"],
+                capture_output=True, timeout=20, check=True,
+            )
+            with Image.open(io.BytesIO(frame.stdout)) as opened:
+                image = opened.convert("RGB")
+        elif item.get("type") == "scene":
+            image = scene_image(item)
+    except (OSError, ValueError, KeyError, IndexError, TypeError, struct.error, subprocess.SubprocessError):
+        LOG.warning("Could not extract a high-resolution login still for %s", item["id"], exc_info=True)
+
+    if image is None:
+        result = prepare(item, cache)
+        source = result.get("displayPreview") or item.get("preview")
+        if not source:
+            raise ValueError("No image is available for the login background.")
+        # A transient decoder failure must not permanently cache a thumbnail as
+        # the native video still. The next application should retry extraction.
+        if item.get("type") == "video":
+            return str(source)
+        with Image.open(source) as opened:
+            image = opened.convert("RGB")
+
+    image.thumbnail((2560, 1440), Image.Resampling.LANCZOS)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp = tempfile.mkstemp(dir=target.parent, suffix=".jpg")
+    try:
+        os.close(fd)
+        image.save(temp, quality=94, subsampling=0)
+        os.replace(temp, target)
+    finally:
+        if os.path.exists(temp):
+            os.unlink(temp)
+    return str(target)

@@ -8,7 +8,7 @@
   },
   "wallpaperUnitTests": {
     "passed": true,
-    "count": 28
+    "count": 40
   },
   "installationSnapshotTests": {
     "passed": true,
@@ -71,5 +71,16 @@
     "before": "An unrelated X11 fullscreen-state update replayed an old NormalState request and restored a minimized window.",
     "after": "The same update left all three test windows minimized. The request is consumed once; cached X11 requests are cleared when attaching the observer."
   },
-  "visualDemonstrations": "Deferred at the desktop owner's request; no recordings are published."
+  "visualDemonstrations": "Deferred at the desktop owner's request; no recordings are published.",
+  "greeterExportTests": {
+    "passed": true,
+    "count": 5
+  },
+  "wallpaperStartup": {
+    "coldServiceStartAndConfigReload": "passed on the supported desktop",
+    "repeatedReloadKeepsController": true,
+    "fullLogoutLoginAfterUpdate": "not yet repeated",
+    "portableStartupRegressionTests": 6,
+    "loginImageRegressionTests": 6
+  }
 }

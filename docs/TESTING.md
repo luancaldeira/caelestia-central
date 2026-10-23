@@ -9,6 +9,10 @@ python3 -m unittest discover -s wallpaperengine/tests -v
 
 The wallpaper suite covers Steam library discovery, subscription removal and empty lists, malformed/atomic metadata writes, safe paths, video/scene poster preparation, palette hue and contrast, isolation from global application theme writers, renderer recovery, startup retries, and transition cleanup. Palette tests require the installed Caelestia Python package and materialyoucolor. Portable CI runs installation, library and transition checks without assuming a graphical session or a Caelestia installation.
 
+Startup regressions also cover an unloaded systemd user unit, late compositor/monitor readiness, stale Wayland environment, concurrent duplicate hooks and failure logging. Login-image checks use generated video fixtures and scene captures to verify native resolution, cache reuse, retry after decoder failure, late capture upgrades, and rejection of obsolete asynchronous results. Optional greeter export tests preserve unrelated settings and profile fields, check atomic public image writes, and ensure the root profile updater never reads user image bytes. These checks are included in portable CI.
+
+The stopped-service/config-reload sequence was reproduced in the supported desktop: the old `reset-failed` prerequisite aborted before starting an unloaded service; direct startup restored the saved wallpaper without opening the central. Repeated reloads kept the same controller PID. A complete logout/login cycle after this update has not been repeated automatically.
+
 ## Live close-isolation regression
 
 Run only in the supported Hyprland/Caelestia desktop. This opt-in test creates three related GTK windows on a temporary workspace and briefly operates the central. Requirements include Python GObject/GTK4, a C compiler, wayland-scanner and Wayland client headers.
