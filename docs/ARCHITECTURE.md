@@ -6,6 +6,8 @@
 
 `modules/minimized/Wrapper.qml` keeps favorites and the options row on a shared horizontal track. A clipped viewport and the native `Anim` behavior reproduce the dashboard's expressive transition. Both pages remain mounted; hit testing follows the selected page. Width and height are shared between those two compact views, while the window and wallpaper views have their own dimensions.
 
+The wallpaper carousel keeps its final screen-bounded dimensions inside a clipped viewport while the panel opens. Cover dimensions, image crops and orbit spacing remain stable throughout the expansion.
+
 `MiniApplications.qml` displays raw favorite icons. `ApplicationLibrary.qml` reads desktop entries and preserves native DesktopEntry launch semantics, including D-Bus activation, working directories, and arguments. An optional icon origin arms a short-lived native launch intent. Matching existing windows are reused; minimized matches go through the regular restore service.
 
 ## Minimized-window lifecycle

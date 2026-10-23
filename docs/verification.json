@@ -138,5 +138,18 @@
     "contentWaitsForPanelSpace": true,
     "smallVerticalReveal": true,
     "screenRecordingUsed": false
+  },
+  "wallpaperOpening": {
+    "passed": true,
+    "carouselSize": [
+      854,
+      300
+    ],
+    "coverSize": [
+      420,
+      242
+    ],
+    "coverDimensionsConstantThroughoutPanelResize": true,
+    "screenRecordingUsed": false
   }
 }

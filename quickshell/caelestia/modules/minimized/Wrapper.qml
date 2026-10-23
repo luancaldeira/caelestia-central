@@ -27,8 +27,10 @@ Item {
     readonly property real windowPanelWidth: Math.max(384,Math.min(440,compactWidth))
     readonly property real windowPanelHeight: 340
     readonly property real emptyWindowPanelHeight: 244
-    implicitWidth: Math.min(activeTab === 0 ? compactWidth : activeTab === 1 ? windowPanelWidth : 854,screen.width - 100)
-    implicitHeight: Math.min(activeTab === 0 ? compactHeight + (statusNotice.visible ? 24 : 0) : activeTab === 1 ? (windows.animatedCount > 0 ? windowPanelHeight : emptyWindowPanelHeight) : 440,screen.height - 160)
+    readonly property real wallpaperPanelWidth: Math.min(854,screen.width - 100)
+    readonly property real wallpaperPanelHeight: Math.min(440,screen.height - 160)
+    implicitWidth: Math.min(activeTab === 0 ? compactWidth : activeTab === 1 ? windowPanelWidth : wallpaperPanelWidth,screen.width - 100)
+    implicitHeight: Math.min(activeTab === 0 ? compactHeight + (statusNotice.visible ? 24 : 0) : activeTab === 1 ? (windows.animatedCount > 0 ? windowPanelHeight : emptyWindowPanelHeight) : wallpaperPanelHeight,screen.height - 160)
     anchors.bottomMargin: (-implicitHeight - 5) * offsetScale
     visible: offsetScale < 1
     opacity: 1 - offsetScale
@@ -89,6 +91,7 @@ Item {
             selected:activeTab === 1 ? currentEntry?.address : currentEntry?.id,
             rendered:activeTab === 0 ? count : activeCarousel.animatedCount,menuOpen:menuOpen,
             emptyMotion:{opacity:emptyState.opacity,reveal:emptyState.reveal,type:panelHeightMotion.type,duration:panelHeightMotion.duration},
+            wallpaperLayout:{width:wallpapers.width,height:wallpapers.height,coverWidth:wallpapers.coverWidth,coverHeight:wallpapers.coverHeight},
             appsView:"mini",launcher:screenState.launcher,icons:miniHub.entries.map(entry => entry.id),
             handle:handle.mapToItem(null,handle.width/2,handle.height/2),
             mini:miniHub.mapToItem(null,0,0),compactWidth:compactWidth,compactHeight:compactHeight,
@@ -226,20 +229,29 @@ Item {
         onActivated: (entry, origin) => root.activate(entry,origin)
         onSecondaryTriggered: entry => Minimized.close(entry.address,entry.pid)
     }
-    CardCarousel {
-        id: wallpapers
+    Item {
         anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
         anchors.topMargin: statusNotice.visible ? 36 : 12
-        height: root.height - 140
+        height: Math.max(0,root.height - 140)
         clip: true
-        wallpapers: true
-        items: WallpaperLibrary.entries
-        enabled: root.activeTab === 2
-        opacity: enabled ? 1 : 0
-        visible: opacity > 0
-        Behavior on opacity { Anim { type: Anim.DefaultEffects } }
-        onActivated: entry => root.activate(entry)
-        onSecondaryTriggered: entry => WallpaperLibrary.favorite(entry.id)
+
+        // Reveal a final-size carousel through the growing panel, without
+        // resizing its covers or orbit during the hub's opening animation.
+        CardCarousel {
+            id: wallpapers
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: root.wallpaperPanelWidth
+            height: Math.max(0,root.wallpaperPanelHeight - 140)
+            clip: true
+            wallpapers: true
+            items: WallpaperLibrary.entries
+            enabled: root.activeTab === 2
+            opacity: enabled ? 1 : 0
+            visible: opacity > 0
+            Behavior on opacity { Anim { type: Anim.DefaultEffects } }
+            onActivated: entry => root.activate(entry)
+            onSecondaryTriggered: entry => WallpaperLibrary.favorite(entry.id)
+        }
     }
     Column {
         id: emptyState
