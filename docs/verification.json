@@ -1,0 +1,75 @@
+{
+  "date": "2026-10-23",
+  "nativePluginVersion": "1.5",
+  "environment": {
+    "hyprland": "0.56.2",
+    "caelestiaShell": "2.3.0",
+    "quickshell": "0.3.1"
+  },
+  "wallpaperUnitTests": {
+    "passed": true,
+    "count": 28
+  },
+  "installationSnapshotTests": {
+    "passed": true,
+    "count": 3
+  },
+  "closeIsolation": {
+    "passed": true,
+    "cases": [
+      {
+        "backend": "x11",
+        "action": "close Beta",
+        "veto": true,
+        "remaining": 3,
+        "othersStayedMinimized": true,
+        "hubStayedOpen": true
+      },
+      {
+        "backend": "x11",
+        "action": "close Alpha",
+        "veto": false,
+        "remaining": 2,
+        "othersStayedMinimized": true,
+        "hubStayedOpen": true
+      },
+      {
+        "backend": "x11",
+        "action": "close Gamma",
+        "veto": false,
+        "remaining": 1,
+        "othersStayedMinimized": true,
+        "hubStayedOpen": true
+      },
+      {
+        "backend": "wayland",
+        "action": "close Beta",
+        "veto": true,
+        "remaining": 3,
+        "othersStayedMinimized": true,
+        "hubStayedOpen": true
+      },
+      {
+        "backend": "wayland",
+        "action": "close Alpha",
+        "veto": false,
+        "remaining": 2,
+        "othersStayedMinimized": true,
+        "hubStayedOpen": true
+      },
+      {
+        "backend": "wayland",
+        "action": "close Gamma",
+        "veto": false,
+        "remaining": 1,
+        "othersStayedMinimized": true,
+        "hubStayedOpen": true
+      }
+    ]
+  },
+  "regression": {
+    "before": "An unrelated X11 fullscreen-state update replayed an old NormalState request and restored a minimized window.",
+    "after": "The same update left all three test windows minimized. The request is consumed once; cached X11 requests are cleared when attaching the observer."
+  },
+  "visualDemonstrations": "Deferred at the desktop owner's request; no recordings are published."
+}

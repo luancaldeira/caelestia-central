@@ -1,0 +1,33 @@
+# Architecture
+
+## Shell and compact navigation
+
+`quickshell/caelestia` is a modified Caelestia Shell 2.3.0 source snapshot. The central is integrated into the existing drawer surface, input region, screen state, and palette services. It does not add a separate polling daemon for mouse hover.
+
+`modules/minimized/Wrapper.qml` keeps favorites and the options row on a shared horizontal track. A clipped viewport and the native `Anim` behavior reproduce the dashboard's expressive transition. Both pages remain mounted; hit testing follows the selected page. Width and height are shared between those two compact views, while the window and wallpaper views have their own dimensions.
+
+`MiniApplications.qml` displays raw favorite icons. `ApplicationLibrary.qml` reads desktop entries and preserves native DesktopEntry launch semantics, including D-Bus activation, working directories, and arguments. An optional icon origin arms a short-lived native launch intent. Matching existing windows are reused; minimized matches go through the regular restore service.
+
+## Minimized-window lifecycle
+
+`Minimized.qml` records address, PID, workspace, geometry and thumbnail before minimizing. The address/PID pair guards against stale entries and reused window addresses. Hidden windows live on `special:caelestia-minimized`. Normal close requests are sent directly to the application; entries disappear only when the compositor reports that the window actually closed. An application can still reject closing to protect unsaved work.
+
+The native plugin listens for client minimize requests in XDG-shell and XWayland. Each optional request is **consumed once**. In Hyprland 0.56.2, XWayland retains `requestsMinimize` while its shared `stateChanged` signal also reports unrelated fullscreen/maximize updates. Re-emitting that retained value could replay an old restore request for minimized siblings. Version 1.5 clears the request after reading it. Explicit subsequent restore requests still work.
+
+`WindowStack.qml` holds stable address/PID identities, freezes outgoing cards during removal, and captures the pressed entry before a close/restore gesture. The queue has bounded, rate-limited wheel movement suitable for a small number of windows. Restoring from the hub targets the current workspace and retains the layer surface and pointer, allowing successive restores.
+
+## Native motion
+
+The extension animates presented window geometry while keeping the compositor's layout goals and the client surface resolution intact. At the end of minimizing, it masks the move to the hidden workspace to avoid a second fade or a full-size flash. Restoration starts at the actual preview or clicked app icon. Interrupted minimize flights retain their current presented geometry.
+
+Closing hooks the compositor's native `CWindowAnimationController::animateOut` context, after the client really closes. The snapshot shrinks upward; the close request itself is not delayed. There is no per-frame renderer hook. The complete ABI hash and the target symbol are checked before hooks are installed, and hooks/listeners are removed on unload.
+
+## Wallpaper integration
+
+`wallpaperengine/` extends the separately installed Almamu/linux-wallpaperengine renderer. `catalog.py` discovers downloaded Workshop projects; `subscriptions.py` synchronizes Steam metadata; `previews.py` prepares cached posters from video frames, rendered captures, or recoverable scene artwork. Scene package/texture parsing follows the installed upstream format. It does not start an additional live renderer to make each preview.
+
+`controller.py` serializes renderer changes, preserves the latest requested selection, and handles recovery. `palette.py` generates Material color roles through the Caelestia Python utilities and writes only the shell's scheme state. Legacy serialized intensity identifiers are retained for preference compatibility; all displayed labels are English.
+
+`transition.py` prepares a private runtime capture of the previous desktop while the new wallpaper and colors become ready. `WallpaperTransition.qml` and `modules/wallpaper/splash.frag` reveal the new live scene through a soft circular mask. The overlay receives no pointer/keyboard input and has a timeout, lock/workspace cancellation, and capture cleanup. Captures are temporary runtime data, not library items.
+
+Only Steam Workshop Wallpaper Engine projects are indexed. No arbitrary local-image/video importer exists yet. The rendering engine and Workshop assets remain separate dependencies.

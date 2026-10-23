@@ -1,0 +1,23 @@
+name: Source and controller checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  portable-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install Pillow
+      - name: Compile Python sources
+        run: python -m compileall -q scripts tests wallpaperengine
+      - name: Installation snapshot tests
+        run: python -m unittest discover -s tests -v
+      - name: Library synchronization and preview tests
+        run: python -m unittest discover -s wallpaperengine/tests -p test_library_sync.py -v
+      - name: Wallpaper transition lifecycle tests
+        run: python -m unittest discover -s wallpaperengine/tests -p test_transition.py -v
+      # Full palette tests require an installed Caelestia CLI and its Python
+      # dependencies. Native motion tests additionally require the target desktop.

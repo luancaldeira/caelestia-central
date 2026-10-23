@@ -1,0 +1,18 @@
+[Unit]
+Description=Steam Workshop wallpapers and Caelestia colour controller
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=%h/.config/wallpaperengine/wallpaperctl serve
+Restart=on-failure
+RestartSec=5
+KillMode=control-group
+TimeoutStopSec=10
+Environment=PATH=/usr/bin:/bin
+Environment=XDG_SESSION_TYPE=wayland
+UMask=0077
+
+# Started by hyprland.start after importing the current Wayland environment.
+# This desktop does not activate graphical-session.target. The controller
+# watches its compositor connection and exits cleanly when that session ends.

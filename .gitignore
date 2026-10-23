@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*.so
+build.log
+.venv/
+tests/desktop/virtual-pointer
+tests/desktop/virtual-pointer.h
+tests/desktop/virtual-pointer-protocol.c
+.pytest_cache/
+test-results/

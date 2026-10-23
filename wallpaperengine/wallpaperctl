@@ -1,0 +1,139 @@
+#!/usr/bin/python3
+"""Public entry point used by Hyprland, the desktop launcher and the picker."""
+import argparse
+import json
+import os
+import signal
+from pathlib import Path
+import socket
+import subprocess
+import sys
+import time
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from catalog import STATE, RUNTIME, scan, load
+
+ROOT = Path(__file__).resolve().parent
+
+
+def call(request):
+    with socket.socket(socket.AF_UNIX) as client:
+        client.settimeout(12)
+        client.connect(str(RUNTIME / "wallpaperengine.sock"))
+        client.sendall((json.dumps(request) + "\n").encode())
+        stream = client.makefile("r")
+        result = json.loads(stream.readline())
+    if not result.get("ok"):
+        raise RuntimeError(result.get("error", "Controller failed"))
+    return result.get("data")
+
+
+def ensure_service(restart=False):
+    names = [name for name in ("WAYLAND_DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE", "DISPLAY",
+                               "XDG_CURRENT_DESKTOP", "XDG_SESSION_TYPE", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS") if name in os.environ]
+    subprocess.run(["systemctl", "--user", "import-environment", *names], check=True)
+    if restart:
+        subprocess.run(["systemctl", "--user", "reset-failed", "wallpaperengine.service"], check=True)
+    subprocess.run(["systemctl", "--user", "restart" if restart else "start", "wallpaperengine.service"], check=True)
+    deadline = time.monotonic() + (120 if restart else 12)
+    while time.monotonic() < deadline:
+        try:
+            status = call({"action": "status"})
+            if not restart or (status.get("running") and not status.get("busy")):
+                return status
+            if status.get("error") and not status.get("busy"):
+                raise RuntimeError(status["error"])
+        except (OSError, ValueError):
+            pass
+        time.sleep(.2)
+    raise RuntimeError("The controller did not start. Check journalctl --user -u wallpaperengine.service.")
+
+
+def ui(rofi=False):
+    try:
+        call({"action": "status"})
+    except OSError:
+        ensure_service()
+    if rofi:
+        data = call({"action": "list"})
+        items = data["items"]
+        choices = "\n".join(i["title"].replace("\n", " ")+"\0icon\x1f"+i["preview"] for i in items)
+        result = subprocess.run(["rofi", "-dmenu", "-i", "-show-icons", "-format", "i", "-p", "Steam Wallpapers"],
+                                input=choices, capture_output=True, text=True)
+        if result.returncode == 0 and result.stdout.strip().isdigit():
+            call({"action": "apply", "id": items[int(result.stdout)]["id"]})
+        return
+    path = str(ROOT / "ui")
+    def ipc(method):
+        try:
+            return subprocess.run(["qs", "ipc", "-p", path, "call", "picker", method], capture_output=True, timeout=2).returncode == 0
+        except subprocess.TimeoutExpired:
+            return False
+    if ipc("toggle"):
+        return
+    result = False
+    for _ in range(3):
+        time.sleep(.2)
+        if ipc("open"):
+            return
+    # Recover only our own panel if a Qt/Quickshell live reload got stuck.
+    listing = subprocess.run(["qs", "list", "--all", "--json"], capture_output=True, text=True, timeout=3)
+    for instance in json.loads(listing.stdout or "[]"):
+        if Path(instance.get("config_path", "")).resolve() == (ROOT / "ui/shell.qml").resolve():
+            pid = int(instance["pid"])
+            proc = Path(f"/proc/{pid}")
+            if proc.exists() and proc.stat().st_uid == os.getuid():
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                    time.sleep(.5)
+                    if proc.exists():
+                        os.kill(pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+    subprocess.run(["qs", "-p", path, "-n", "-d"], capture_output=True, timeout=15, check=True)
+    for _ in range(15):
+        if ipc("open"):
+            return
+        time.sleep(.1)
+    raise RuntimeError("The picker did not open. Try wallpaperctl ui --rofi.")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Steam wallpapers and Caelestia colors")
+    parser.add_argument("action", choices=["serve", "session", "ui", "scan", "list", "status", "refresh",
+                                           "apply", "restore", "next", "random", "favorite", "preview",
+                                           "theme-options", "recolor", "undo-theme"])
+    parser.add_argument("id", nargs="?")
+    parser.add_argument("options", nargs="?")
+    parser.add_argument("--rofi", action="store_true")
+    args = parser.parse_args()
+    if args.action == "serve":
+        from controller import serve
+        serve()
+        return
+    if args.action == "session":
+        ensure_service(restart=True)
+        return
+    if args.action == "scan":
+        print(json.dumps(scan(), ensure_ascii=False))
+        return
+    if args.action == "ui":
+        ui(args.rofi)
+        return
+    req = {"action": args.action, "id": args.id}
+    if args.options:
+        req["options"] = json.loads(args.options)
+    try:
+        result = call(req)
+    except (FileNotFoundError, ConnectionRefusedError):
+        ensure_service()
+        result = call(req)
+    print(json.dumps(result, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as e:
+        print(str(e), file=sys.stderr)
+        raise SystemExit(1)
