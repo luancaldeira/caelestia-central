@@ -14,8 +14,8 @@ Singleton {
     readonly property string session: Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE")
     readonly property string thumbnailDir: Paths.cache + "/minimized"
     property var entries: []
-    property var pending: ({})
     property var moving: ({})
+    property var thumbnailRequests: ({})
     property bool loaded: false
     property bool ready: false
     readonly property int count: entries.length
@@ -41,7 +41,7 @@ Singleton {
         if (!t)
             return;
         const a = address(t.address);
-        if (entries.some(e => e.address === a) || pending[a])
+        if (entries.some(e => e.address === a))
             return;
         const ipc = t.lastIpcObject;
         if (ipc.workspace?.name === workspace)
@@ -53,19 +53,13 @@ Singleton {
             at: Array.from(ipc.at ?? []), size: Array.from(ipc.size ?? []),
             thumbnail: "", time: Date.now()
         };
-        pending[a] = record;
-        // Refresh while the thumbnail is captured so recent floating moves and
-        // resizes are saved from the current compositor geometry, not its cache.
         Hyprland.refreshToplevels();
-        captureRequested(t, a, thumbnailDir + "/" + a + "-" + record.time + ".png");
-        captureDeadline.start();
+        // Motion must not wait for GPU readback or PNG encoding. The thumbnail
+        // is captured only after the native client reaches the hidden workspace.
+        beginMinimize(record);
     }
-    function completeCapture(value, imagePath) {
-        const a = address(value);
-        const record = pending[a];
-        if (!record)
-            return;
-        delete pending[a];
+    function beginMinimize(record) {
+        const a = record.address;
         const t = find(a);
         if (!t || t.lastIpcObject.pid !== record.pid)
             return;
@@ -76,7 +70,6 @@ Singleton {
         record.at = Array.from(ipc.at ?? record.at);
         record.size = Array.from(ipc.size ?? record.size);
         record.monitor = t.monitor?.name ?? record.monitor;
-        record.thumbnail = imagePath;
         entries = [record, ...entries];
         moving[a] = Date.now();
         save();
@@ -94,6 +87,36 @@ Singleton {
             commands.forEach(command => Hypr.dispatch(command));
         }
         settle.restart();
+    }
+    function completeThumbnail(value, imagePath, capturedPid) {
+        const a = address(value);
+        const entry = entries.find(e => e.address === a && e.pid === capturedPid);
+        if (entry && imagePath === thumbnailDir + "/" + a + "-" + entry.time + ".png") {
+            entries = entries.map(e => e === entry ? Object.assign({},e,{thumbnail:imagePath}) : e);
+            save();
+        } else if (imagePath.startsWith(thumbnailDir + "/")) {
+            Quickshell.execDetached(["rm", "-f", imagePath]);
+        }
+    }
+    function requestThumbnails() {
+        if (WindowDrawer.motions.count > 0 || ShellState.sessionLocked) return;
+        for (const entry of entries) {
+            if (entry.thumbnail || thumbnailRequests[entry.address] === entry.time) continue;
+            const t = find(entry.address);
+            if (!t || t.lastIpcObject.pid !== entry.pid || t.workspace?.name !== workspace) continue;
+            thumbnailRequests[entry.address] = entry.time;
+            captureRequested(t, entry.address, thumbnailDir + "/" + entry.address + "-" + entry.time + ".png");
+        }
+    }
+    function updateMotionGeometry(frame) {
+        if (!frame.minimizing || frame.done) return;
+        const record = entries.find(e => e.address === frame.address && e.pid === frame.pid);
+        if (!record) return;
+        // The native layout goal is authoritative, including a floating move
+        // that occurred before the asynchronous toplevel refresh completed.
+        record.at = [frame.x,frame.y];
+        record.size = [frame.width,frame.height];
+        save();
     }
     function restore(value, expectedPid, origin, keepHub = false) {
         const a = address(value);
@@ -129,6 +152,7 @@ Singleton {
             commands.forEach(command => Hypr.dispatch(command));
         }
         entries = entries.filter(e => e.address !== a);
+        delete thumbnailRequests[a];
         removeThumbnail(record);
         save();
         settle.restart();
@@ -151,8 +175,8 @@ Singleton {
             removeThumbnail(record);
             save();
         }
-        delete pending[a];
         delete moving[a];
+        delete thumbnailRequests[a];
     }
     function restoreAll() {
         for (const e of [...entries].reverse())
@@ -189,6 +213,7 @@ Singleton {
             entries = kept;
             save();
         }
+        thumbnailIdle.restart();
     }
     function toggle() {
         const s = ShellState.forActive();
@@ -231,16 +256,18 @@ Singleton {
         onTriggered: { Hyprland.refreshToplevels(); root.reconcile(); }
     }
     Timer {
-        id: captureDeadline
-        interval: 80
-        repeat: true
-        onTriggered: {
-            for (const [a, r] of Object.entries(root.pending))
-                if (Date.now() - r.time > 600)
-                    root.completeCapture(a, "");
-            if (Object.keys(root.pending).length === 0)
-                stop();
-        }
+        id: thumbnailIdle
+        interval: 120
+        onTriggered: root.requestThumbnails()
+    }
+    onEntriesChanged: thumbnailIdle.restart()
+    Connections {
+        target: WindowDrawer.motions
+        function onCountChanged() { if (!WindowDrawer.motions.count) thumbnailIdle.restart(); }
+    }
+    Connections {
+        target: ShellState
+        function onSessionLockedChanged() { if (!ShellState.sessionLocked) thumbnailIdle.restart(); }
     }
     Connections {
         target: Hyprland
@@ -258,6 +285,10 @@ Singleton {
                 }
                 Hyprland.refreshToplevels();
                 settle.restart();
+                thumbnailIdle.restart();
+            } else if (event.name === "caelestia_drawer") {
+                try { root.updateMotionGeometry(JSON.parse(event.data)); }
+                catch (e) { console.warn("Minimized: invalid motion geometry",e); }
             } else if (event.name === "closewindow") {
                 root.forget(event.data);
                 settle.restart();

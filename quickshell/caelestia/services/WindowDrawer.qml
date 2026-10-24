@@ -12,6 +12,7 @@ Singleton {
     readonly property double generation: Date.now()
     property int completed: 0
     property var panels: ({})
+    property var recent: []
 
     ListModel { id: motions; dynamicRoles: true }
     function dispatch(method, values) {
@@ -28,7 +29,13 @@ Singleton {
             if(!frame.address) return;
             const index=indexOf(frame.address);
             if(frame.done) {
-                if(index>=0 && motions.get(index).token===frame.token) motions.remove(index);
+                if(index>=0 && motions.get(index).token===frame.token) {
+                    try {
+                        const report=panels[frame.address]?.info();
+                        if(report) recent=recent.slice(-7).concat([Object.assign(report,{completedAt:Date.now()})]);
+                    } catch(e) {}
+                    motions.remove(index);
+                }
                 return;
             }
             if(![frame.pid,frame.token,frame.monitor,frame.x,frame.y,frame.width,frame.height].every(Number.isFinite) || frame.width<8 || frame.height<8) return;
@@ -38,7 +45,7 @@ Singleton {
             if(index>=0 && motions.get(index).token!==frame.token) motions.remove(index);
             const current=indexOf(frame.address);
             if(current>=0) motions.set(current,values);
-            else motions.append(values);
+            else motions.append(Object.assign(values,{receivedAt:Date.now()}));
         } catch(e) { console.warn("WindowDrawer: invalid handoff",e); }
     }
     function claim(model) { dispatch("claim_drawer", [JSON.stringify(model.address),model.pid,model.token]); }
@@ -70,7 +77,7 @@ Singleton {
             for(const panel of Object.values(root.panels)) {
                 try { const frame=panel?.info(); if(frame) result.push(frame); } catch(e) {}
             }
-            return JSON.stringify({generation:root.generation,completed:root.completed,count:motions.count,active:result});
+            return JSON.stringify({generation:root.generation,completed:root.completed,count:motions.count,active:result,recent:root.recent});
         }
     }
 }

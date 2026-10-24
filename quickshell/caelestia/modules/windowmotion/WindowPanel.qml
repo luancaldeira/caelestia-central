@@ -25,6 +25,13 @@ Item {
     property bool finishing: false
     property real offsetScale: model?.minimizing ? 0 : 1
     property real dissolve: 1
+    readonly property double createdAt: Date.now()
+    property double startedAt: 0
+    property double settledAt: 0
+    property int frameCount: 0
+    property real maxFrameMs: 0
+    property real totalFrameMs: 0
+    property int contentRefreshes: 0
     readonly property real destination: model?.minimizing ? 1 : 0
     readonly property real distance: screen.height-borderThickness+5-((model?.goalY ?? screen.y)-screen.y)
     readonly property real gap: screen.height-2*borderThickness-panel.y-panel.height/2-
@@ -33,10 +40,11 @@ Item {
     function start() {
         if(started || !capture.hasContent || !client) return;
         started=true;
+        startedAt=Date.now();
         captureDeadline.stop();
         WindowDrawer.claim(model);
         offsetScale=Qt.binding(()=>root.destination);
-        settle.start();
+        frames.restart();
     }
     function updateJoin() {
         if(!started) return;
@@ -46,6 +54,7 @@ Item {
     function complete() {
         if(finishing) return;
         finishing=true;
+        settledAt=Date.now();
         if(model?.minimizing) WindowDrawer.complete(model);
         else {
             WindowDrawer.release(model);
@@ -58,7 +67,10 @@ Item {
             hasContent:capture.hasContent,sourceWidth:capture.sourceSize.width,sourceHeight:capture.sourceSize.height,
             offset:offsetScale,detached:detached,started:started,animating:slide.running,
             x:panel.x+leftInset,y:panel.y+borderThickness,width:panel.width,height:panel.height,gap:gap,
-            deform:[deformation.m11,deformation.m12,deformation.m21,deformation.m22]};
+            deform:[deformation.m11,deformation.m12,deformation.m21,deformation.m22],
+            receivedAt:model.receivedAt,createdAt:createdAt,startedAt:startedAt,settledAt:settledAt,
+            frameCount:frameCount,maxFrameMs:maxFrameMs,meanFrameMs:frameCount ? totalFrameMs/frameCount : 0,
+            contentRefreshes:contentRefreshes};
     }
     onGapChanged: updateJoin()
     onDestinationChanged: {
@@ -66,10 +78,36 @@ Item {
             handoff.stop();
             finishing=false;
             dissolve=1;
-            settle.restart();
+            frames.restart();
         }
     }
     Behavior on offsetScale { Anim { id: slide } }
+    FrameAnimation {
+        id: frames
+        property real nextCaptureAt: 1/30
+        onTriggered: {
+            if(currentFrame>1) {
+                root.frameCount++;
+                root.maxFrameMs=Math.max(root.maxFrameMs,frameTime*1000);
+                root.totalFrameMs+=frameTime*1000;
+            }
+            // Refresh client content without coupling capture throughput to a
+            // high-refresh monitor. Geometry still animates at display rate.
+            if(elapsedTime>=nextCaptureAt) {
+                capture.captureFrame();
+                root.contentRefreshes++;
+                nextCaptureAt=elapsedTime+1/30;
+            }
+            const m=root.deformation;
+            const atRest=Math.abs(m.m11-1)+Math.abs(m.m12)+Math.abs(m.m21)+Math.abs(m.m22-1)<.006;
+            if(!slide.running && Math.abs(root.offsetScale-root.destination)<.0001 && (root.model.minimizing || atRest)) {
+                stop();
+                root.detached=!root.model.minimizing;
+                root.complete();
+            }
+        }
+        onRunningChanged: if(running) nextCaptureAt=1/30
+    }
 
     // The same reserved frame and clipping as the existing drawer content.
     // Client pixels stay inside the border while its shared surface deforms.
@@ -117,20 +155,6 @@ Item {
         onTriggered: {
             console.warn("WindowDrawer: first client frame unavailable",root.model.address);
             root.complete();
-        }
-    }
-    Timer {
-        id: settle
-        interval: 16
-        repeat: true
-        onTriggered: {
-            const m=root.deformation;
-            const atRest=Math.abs(m.m11-1)+Math.abs(m.m12)+Math.abs(m.m21)+Math.abs(m.m22-1)<.006;
-            if(!slide.running && Math.abs(root.offsetScale-root.destination)<.0001 && atRest) {
-                stop();
-                root.detached=!root.model.minimizing;
-                root.complete();
-            }
         }
     }
     Component.onCompleted: { identity=String(model.address); WindowDrawer.attach(identity,root); Qt.callLater(start); }

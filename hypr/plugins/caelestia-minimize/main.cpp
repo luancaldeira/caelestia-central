@@ -135,8 +135,9 @@ static bool startDrawer(PHLWINDOW w,bool minimizing) {
     w->positionAnimation()->warp();
     w->sizeAnimation()->warp();
     // Window export renders a standalone client at alpha=1, independently of
-    // its desktop alpha. Quickshell takes one frame; no video stream is used.
-    w->alpha(Desktop::View::WINDOW_ALPHA_FADE)->setValueAndWarp(0.F);
+    // its desktop alpha. Keep a minimizing client visible until the shell has
+    // its first frame; opening stays masked to avoid a full-size flash.
+    if(!minimizing) w->alpha(Desktop::View::WINDOW_ALPHA_FADE)->setValueAndWarp(0.F);
     drawerLeases.emplace(key,lease);
     drawerEvent(key,lease);
     flightTimer->updateTimeout(std::chrono::milliseconds(8));
@@ -158,7 +159,10 @@ static int claimDrawer(lua_State* L) {
     const auto w=luaWindow(L);
     const auto it=w ? drawerLeases.find(reinterpret_cast<uintptr_t>(w.get())) : drawerLeases.end();
     const auto valid=it!=drawerLeases.end() && lua_isinteger(L,3) && it->second.token==static_cast<uint64_t>(lua_tointeger(L,3));
-    if(valid) it->second.claimed=true;
+    if(valid) {
+        it->second.claimed=true;
+        w->alpha(Desktop::View::WINDOW_ALPHA_FADE)->setValueAndWarp(0.F);
+    }
     lua_pushboolean(L,valid);
     return 1;
 }
@@ -636,7 +640,8 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
                     w->positionAnimation()->warp(); w->sizeAnimation()->warp();
                     drawerEvent(key,lease);
                 }
-                if(!lease.released) w->alpha(Desktop::View::WINDOW_ALPHA_FADE)->value()=0.F;
+                if(!lease.released && (!lease.minimizing || lease.claimed))
+                    w->alpha(Desktop::View::WINDOW_ALPHA_FADE)->value()=0.F;
             }
         }
         for(const auto& [key,complete]:drawerDone) finishDrawer(key,complete);
@@ -662,7 +667,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     for (const auto& w : Desktop::windowState()->windows())
         observe(w);
     g_pEventManager->postEvent(SHyprIPCEvent{.event="caelestia_drawer_ready",.data="1"});
-    return {"caelestia-minimize", "Native window handoff for Caelestia drawers", "luancaldeira", "2.0"};
+    return {"caelestia-minimize", "Native window handoff for Caelestia drawers", "luancaldeira", "2.1"};
 }
 
 APICALL EXPORT void PLUGIN_EXIT() {

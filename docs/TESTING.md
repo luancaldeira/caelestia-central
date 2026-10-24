@@ -45,9 +45,9 @@ The lock/unlock cycle was previously confirmed by the desktop owner. An automate
 
 ## Shared drawer verification
 
-`qs -c caelestia ipc call windowdrawer info` reports active image readiness, source resolution, drawer offset, deformed border clearance and detachment. Verify these alongside the actual displayed animation; native alpha alone cannot establish that a window image is visible. Opening and restoring must show client pixels inside the moving surface, and minimization must follow the same surface back into the border. At rest there must be no active panel or outstanding hidden native client.
+`qs -c caelestia ipc call windowdrawer info` reports active image readiness, source resolution, drawer offset, deformed border clearance and detachment. Its last eight completed panels also include capture wait, animation frame intervals, refresh request count and handoff timestamps. Verify these alongside the actual displayed animation; native alpha alone cannot establish that a window image is visible. Opening and restoring must show client pixels inside the moving surface, and minimization must follow the same surface back into the border. At rest there must be no active panel or outstanding hidden native client.
 
-Use real applications in addition to GTK fixtures, and test both Wayland and X11. Check the ordinary native launcher as well as favorite icons. The preview is a single still image during the brief motion, so busy application content becomes live again when the native surface is revealed. No screen recording is required.
+Use real applications in addition to GTK fixtures, and test both Wayland and X11. Check the ordinary native launcher as well as favorite icons. A fixture that changes its content after the first captured frame must visibly update inside the moving surface before the native handoff. Content refresh is capped at 30 Hz; this must not lower the geometry animation's frame rate. Minimize must begin before thumbnail readback/encoding, and the thumbnail must still arrive after the window is hidden. Restore or close an entry while its thumbnail is pending to check that a late callback cannot recreate it. No screen recording is required.
 
 ## Visual demonstrations
 

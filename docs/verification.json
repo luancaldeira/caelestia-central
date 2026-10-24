@@ -1,6 +1,6 @@
 {
   "date": "2026-10-24",
-  "nativePluginVersion": "2.0",
+  "nativePluginVersion": "2.1",
   "environment": {
     "hyprland": "0.56.2",
     "caelestiaShell": "2.3.0",
@@ -302,7 +302,105 @@
       "includesRejectedClose": true
     },
     "desktopOwnerFeedback": "The shared border motion is on the right track.",
-    "verificationScope": "Instrumented application tests preceded the final border-clipping adjustment. The desktop owner tested the installed adjustment afterward and confirmed the direction. Native launcher routing is implemented; its separate GUI path has not been independently verified.",
-    "screenRecordingUsed": false
+    "verificationScope": "Historical verification of the shared-drawer implementation before the performance update; current performance and content-refresh checks are below.",
+    "screenRecordingUsed": false,
+    "measuredPluginVersion": "2.0"
+  },
+  "drawerPerformance": {
+    "beforePluginVersion": "2.0",
+    "afterPluginVersion": "2.1",
+    "method": "Same-session real Kitty windows on Wayland and X11, 1920x1080 at 100 Hz. Input-to-motion includes the local IPC command startup. Frame intervals come from Qt animation updates, not encoded video or presentation feedback. These are per-run measurements, not cross-device guarantees.",
+    "contentRefreshLimitHz": 30,
+    "geometryUsesDisplayCadence": true,
+    "thumbnailReadbackAndEncodingAfterMotion": true,
+    "minimizingNativeClientVisibleUntilFirstImage": true,
+    "comparison": [
+      {
+        "backend": "wayland",
+        "beforeInputToMinimizeImageMs": 110.5,
+        "afterInputToMinimizeImageMs": 47.5,
+        "beforeMinimizeSettleMs": 607,
+        "afterMinimizeSettleMs": 495,
+        "thumbnailAfterMotionMs": 105.9,
+        "thumbnailProduced": true,
+        "transitions": [
+          {
+            "action": "open",
+            "meanAnimationFrameMs": 10.0,
+            "maxAnimationFrameMs": 11.04,
+            "captureWaitMs": 14,
+            "refreshRequests": 15,
+            "handoffMs": 81
+          },
+          {
+            "action": "minimize",
+            "meanAnimationFrameMs": 9.99,
+            "maxAnimationFrameMs": 10.54,
+            "captureWaitMs": 14,
+            "refreshRequests": 12,
+            "handoffMs": 1
+          },
+          {
+            "action": "restore",
+            "meanAnimationFrameMs": 10.01,
+            "maxAnimationFrameMs": 10.87,
+            "captureWaitMs": 16,
+            "refreshRequests": 14,
+            "handoffMs": 81
+          }
+        ]
+      },
+      {
+        "backend": "x11",
+        "beforeInputToMinimizeImageMs": 116.9,
+        "afterInputToMinimizeImageMs": 37.5,
+        "beforeMinimizeSettleMs": 596,
+        "afterMinimizeSettleMs": 499,
+        "thumbnailAfterMotionMs": 103.3,
+        "thumbnailProduced": true,
+        "transitions": [
+          {
+            "action": "open",
+            "meanAnimationFrameMs": 10.29,
+            "maxAnimationFrameMs": 26.18,
+            "captureWaitMs": 16,
+            "refreshRequests": 15,
+            "handoffMs": 81
+          },
+          {
+            "action": "minimize",
+            "meanAnimationFrameMs": 9.99,
+            "maxAnimationFrameMs": 11.05,
+            "captureWaitMs": 10,
+            "refreshRequests": 12,
+            "handoffMs": 1
+          },
+          {
+            "action": "restore",
+            "meanAnimationFrameMs": 10.0,
+            "maxAnimationFrameMs": 10.96,
+            "captureWaitMs": 15,
+            "refreshRequests": 14,
+            "handoffMs": 81
+          }
+        ]
+      }
+    ],
+    "dynamicContentCheck": {
+      "passed": true,
+      "backend": "wayland",
+      "fixture": "A GTK window changed from red to green 160 ms after creation. A 4x4-pixel private crop showed green inside the moving image at 260 ms, with native alpha zero and the slide still running.",
+      "mediaPublished": false
+    },
+    "regressions": {
+      "closeIsolationCases": 6,
+      "x11AndWayland": true,
+      "freshFloatingGoalRestored": true,
+      "restoreBeforeDeferredThumbnailDoesNotRecreateEntry": true,
+      "restoreCancelsActiveMinimize": true,
+      "closeDuringMotionClearsPanelAndEntry": true
+    },
+    "screenRecordingUsed": false,
+    "activePanelsAtRest": 0
   }
 }
