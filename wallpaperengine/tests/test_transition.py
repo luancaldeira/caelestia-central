@@ -32,7 +32,8 @@ class RendererReadyTests(unittest.IsolatedAsyncioTestCase):
                     (root / "state/logs/1.log").write_text("VO: [libmpv] 1920x1080 nv12\n")
                 return {"HDMI-A-1":{"levels":{"0":[{"namespace":"linux-wallpaperengine","pid":123}]}}}
             with patch("controller.CACHE", root / "cache"), patch("controller.STATE", root / "state"), \
-                    patch("controller.hypr", side_effect=hypr), patch("controller.subprocess.Popen", return_value=process):
+                    patch("controller.hypr", side_effect=hypr), patch("controller.subprocess.Popen", return_value=process), \
+                    patch("controller.shutil.which", return_value="/mock/linux-wallpaperengine"):
                 await asyncio.wait_for(c.spawn({"id":"1","signature":"a","title":"Video","type":"video","path":"/item"}), 2)
             self.assertGreater(calls, 4)
             self.assertEqual(c.rendered, "1")
