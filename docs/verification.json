@@ -1,6 +1,6 @@
 {
   "date": "2026-10-24",
-  "nativePluginVersion": "2.1",
+  "nativePluginVersion": "2.2",
   "environment": {
     "hyprland": "0.56.2",
     "caelestiaShell": "2.3.0",
@@ -401,6 +401,183 @@
       "closeDuringMotionClearsPanelAndEntry": true
     },
     "screenRecordingUsed": false,
-    "activePanelsAtRest": 0
+    "activePanelsAtRest": 0,
+    "verificationScope": "Historical measurements of version 2.1 before the continuity fix. The original configured curve and duration are retained in version 2.2; frame preparation and final handoff are now synchronized."
+  },
+  "drawerContinuity": {
+    "nativePluginVersion": "2.2",
+    "easingAndDuration": "Unmodified Caelestia Anim.DefaultSpatial in both directions, including the configured duration.",
+    "startup": "The texture and shared background are prepared across two Qt frame swaps before claiming the native client and starting movement.",
+    "departure": "The surface clears twice the configured blob smoothing distance plus five pixels and reaches deformation rest before removal.",
+    "handoff": "The image and backing surface remain intact until a normal monitor render acknowledges the native client underneath; they are removed together without independent fades.",
+    "releaseIdentityGuards": [
+      "address",
+      "pid",
+      "motion token",
+      "release ID"
+    ],
+    "fallbackDeadlineMs": 160,
+    "constantColorCases": [
+      {
+        "backend": "wayland",
+        "action": "open",
+        "beforePixel": [
+          32,
+          176,
+          32
+        ],
+        "afterPixel": [
+          32,
+          176,
+          32
+        ],
+        "maxChannelDelta": 0,
+        "nativeFrameAckMs": 5,
+        "completionAfterAckMs": 1,
+        "fallback": false
+      },
+      {
+        "backend": "wayland",
+        "action": "restore",
+        "beforePixel": [
+          32,
+          176,
+          32
+        ],
+        "afterPixel": [
+          32,
+          176,
+          32
+        ],
+        "maxChannelDelta": 0,
+        "nativeFrameAckMs": 3,
+        "completionAfterAckMs": 0,
+        "fallback": false
+      },
+      {
+        "backend": "x11",
+        "action": "open",
+        "beforePixel": [
+          32,
+          176,
+          32
+        ],
+        "afterPixel": [
+          32,
+          176,
+          32
+        ],
+        "maxChannelDelta": 0,
+        "nativeFrameAckMs": 6,
+        "completionAfterAckMs": 0,
+        "fallback": false
+      },
+      {
+        "backend": "x11",
+        "action": "restore",
+        "beforePixel": [
+          32,
+          176,
+          32
+        ],
+        "afterPixel": [
+          32,
+          176,
+          32
+        ],
+        "maxChannelDelta": 0,
+        "nativeFrameAckMs": 1,
+        "completionAfterAckMs": 0,
+        "fallback": false
+      }
+    ],
+    "minimizeSamples": [
+      {
+        "backend": "wayland",
+        "samples": [
+          {
+            "elapsedMs": 100,
+            "offset": 0.7597610409954336,
+            "y": 857.4638359471048
+          },
+          {
+            "elapsedMs": 250,
+            "offset": 1.0137653016142227,
+            "y": 1129.7564033304468
+          },
+          {
+            "elapsedMs": 400,
+            "offset": 1.002846950207819,
+            "y": 1118.051930622782
+          }
+        ],
+        "durationMs": 600,
+        "deformationResidual": 0.0059149861335754395,
+        "finalTop": 1115
+      },
+      {
+        "backend": "x11",
+        "samples": [
+          {
+            "elapsedMs": 100,
+            "offset": 0.8093280616187095,
+            "y": 910.5996820552566
+          },
+          {
+            "elapsedMs": 250,
+            "offset": 1.013942083552409,
+            "y": 1129.9459135681823
+          },
+          {
+            "elapsedMs": 400,
+            "offset": 1.002195832736872,
+            "y": 1117.353932693927
+          }
+        ],
+        "durationMs": 593,
+        "deformationResidual": 0.005883932113647461,
+        "finalTop": 1115
+      }
+    ],
+    "regressions": {
+      "dynamicContentDuringMotion": true,
+      "floatingGoalPreserved": true,
+      "restoreCancelsActiveMinimize": true,
+      "closeDuringMotionClearsPanelAndEntry": true,
+      "closeIsolationCases": 6,
+      "backends": [
+        "wayland",
+        "x11"
+      ]
+    },
+    "visualScope": "Generated constant-color fixtures were checked on either side of handoff with bounded private 4x4-pixel crops away from the hub. This does not establish visual behavior for every application or monitor configuration.",
+    "screenRecordingUsed": false,
+    "mediaPublished": false,
+    "framePreparationCases": [
+      {
+        "action": "open",
+        "primedSwaps": 2,
+        "imageReadyToStartMs": 19,
+        "meanAnimationFrameMs": 10.01,
+        "maxAnimationFrameMs": 10.66,
+        "handoffFallback": false
+      },
+      {
+        "action": "minimize",
+        "primedSwaps": 2,
+        "imageReadyToStartMs": 19,
+        "meanAnimationFrameMs": 9.99,
+        "maxAnimationFrameMs": 10.46,
+        "handoffFallback": false
+      },
+      {
+        "action": "restore",
+        "primedSwaps": 2,
+        "imageReadyToStartMs": 19,
+        "meanAnimationFrameMs": 9.99,
+        "maxAnimationFrameMs": 10.38,
+        "handoffFallback": false
+      }
+    ]
   }
 }

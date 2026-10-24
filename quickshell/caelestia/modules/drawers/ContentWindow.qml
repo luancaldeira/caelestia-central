@@ -289,7 +289,7 @@ StyledWindow {
                 Loader {
                     id: motionSurface
                     parent: surfaceLayer
-                    active: drawer.started && !!drawer.model
+                    active: (drawer.priming || drawer.started) && !!drawer.model
                     sourceComponent: PanelBg {
                         panel: drawer.panel
                         deformAmount: .1

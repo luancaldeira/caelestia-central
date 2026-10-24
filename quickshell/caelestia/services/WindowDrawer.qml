@@ -13,6 +13,7 @@ Singleton {
     property int completed: 0
     property var panels: ({})
     property var recent: []
+    signal presented(var frame)
 
     ListModel { id: motions; dynamicRoles: true }
     function dispatch(method, values) {
@@ -49,7 +50,7 @@ Singleton {
         } catch(e) { console.warn("WindowDrawer: invalid handoff",e); }
     }
     function claim(model) { dispatch("claim_drawer", [JSON.stringify(model.address),model.pid,model.token]); }
-    function release(model) { dispatch("release_drawer", [JSON.stringify(model.address),model.pid,model.token]); }
+    function release(model,releaseId) { dispatch("release_drawer", [JSON.stringify(model.address),model.pid,model.token,releaseId]); }
     function complete(model) {
         completed++;
         dispatch("complete_drawer", [JSON.stringify(model.address),model.pid,model.token]);
@@ -60,6 +61,10 @@ Singleton {
         target: Hyprland
         function onRawEvent(event) {
             if(event.name==="caelestia_drawer") root.update(event.data);
+            else if(event.name==="caelestia_drawer_presented") {
+                try { root.presented(JSON.parse(event.data)); }
+                catch(e) { console.warn("WindowDrawer: invalid presentation acknowledgment",e); }
+            }
             else if(event.name==="caelestia_drawer_ready") root.register();
         }
     }

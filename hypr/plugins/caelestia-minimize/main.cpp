@@ -10,6 +10,7 @@
 #include <hyprland/src/managers/EventManager.hpp>
 #include <hyprland/src/animation/AnimationManager.hpp>
 #include <hyprland/src/managers/eventLoop/EventLoopManager.hpp>
+#include <hyprland/src/render/Renderer.hpp>
 #include <unordered_map>
 #include <algorithm>
 #include <charconv>
@@ -28,6 +29,8 @@ extern "C" {
 // the layout has calculated its final geometry. Close motion changes only the
 // native snapshot animation context, after the application has actually closed.
 static CHyprSignalListener opened, closed, openedLate, activated;
+static CHyprSignalListener drawerRendered;
+static PHLMONITORREF drawerRenderingMonitor;
 static CFunctionHook* closeMotionHook = nullptr;
 static std::unordered_map<uintptr_t, CHyprSignalListener> listeners;
 
@@ -67,6 +70,8 @@ struct DrawerLease {
     bool minimizing = false;
     bool claimed = false;
     bool released = false;
+    bool presented = false;
+    uint64_t releaseId = 0;
 };
 static std::unordered_map<uintptr_t, DrawerLease> drawerLeases;
 static uint64_t nextDrawerToken = 0;
@@ -116,6 +121,8 @@ static bool startDrawer(PHLWINDOW w,bool minimizing) {
         auto& lease=existing->second;
         lease.minimizing=minimizing;
         lease.released=false;
+        lease.presented=false;
+        lease.releaseId=0;
         w->alpha(Desktop::View::WINDOW_ALPHA_FADE)->setValueAndWarp(0.F);
         lease.started=Time::steadyNow();
         drawerEvent(key,lease);
@@ -173,7 +180,29 @@ static int releaseDrawer(lua_State* L) {
     const auto valid=it!=drawerLeases.end() && !it->second.minimizing && lua_isinteger(L,3) && it->second.token==static_cast<uint64_t>(lua_tointeger(L,3));
     if(valid) {
         it->second.released=true;
+        it->second.presented=false;
+        it->second.releaseId=lua_isinteger(L,4) ? static_cast<uint64_t>(lua_tointeger(L,4)) : 0;
         w->alpha(Desktop::View::WINDOW_ALPHA_FADE)->setValueAndWarp(it->second.fadeGoal);
+        // Keep the shell image intact until a normal monitor render has
+        // composed the real window underneath it. Toplevel exports do not
+        // emit RENDER_POST, so refreshing that image cannot satisfy this fence.
+        if(!drawerRendered) drawerRendered=Event::bus()->m_events.render.stage.listen([](eRenderStage stage) {
+            if(stage==RENDER_BEGIN) drawerRenderingMonitor=g_pHyprRenderer->m_renderData.pMonitor;
+            if(stage!=RENDER_POST) return;
+            // endRender clears the renderer's data before RENDER_POST.
+            const auto monitor=drawerRenderingMonitor.lock();
+            drawerRenderingMonitor.reset();
+            if(!monitor) return;
+            for(auto& [key,lease]:drawerLeases) {
+                const auto window=lease.window.lock();
+                if(!lease.released || lease.presented || !window || window->m_monitor.lock()!=monitor) continue;
+                lease.presented=true;
+                g_pEventManager->postEvent(SHyprIPCEvent{.event="caelestia_drawer_presented",.data=std::format(
+                    R"({{"address":"{:x}","pid":{},"token":{},"releaseId":{}}})",key,window->getPID(),lease.token,lease.releaseId)});
+            }
+        });
+        g_pHyprRenderer->damageWindow(w,true);
+        if(const auto monitor=w->m_monitor.lock()) monitor->scheduleFrame();
     }
     lua_pushboolean(L,valid);
     return 1;
@@ -645,6 +674,8 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
             }
         }
         for(const auto& [key,complete]:drawerDone) finishDrawer(key,complete);
+        if(std::ranges::none_of(drawerLeases,[](const auto& entry) { return entry.second.released && !entry.second.presented; }))
+            drawerRendered.reset();
         if (!flights.empty() || !drawerLeases.empty())
             timer->updateTimeout(std::chrono::milliseconds(8));
     }, nullptr);
@@ -667,10 +698,11 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     for (const auto& w : Desktop::windowState()->windows())
         observe(w);
     g_pEventManager->postEvent(SHyprIPCEvent{.event="caelestia_drawer_ready",.data="1"});
-    return {"caelestia-minimize", "Native window handoff for Caelestia drawers", "luancaldeira", "2.1"};
+    return {"caelestia-minimize", "Native window handoff for Caelestia drawers", "luancaldeira", "2.2"};
 }
 
 APICALL EXPORT void PLUGIN_EXIT() {
+    drawerRendered.reset();
     drawerAvailable=false;
     while(!drawerLeases.empty()) finishDrawer(drawerLeases.begin()->first,true);
     if (flightTimer) {

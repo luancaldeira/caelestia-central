@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Window
 import Quickshell
 import Quickshell.Wayland
 import Caelestia.Config
@@ -21,9 +22,12 @@ Item {
     readonly property var client: Hypr.toplevels.values.find(t=>Minimized.address(t.address)===model?.address && t.lastIpcObject.pid===model?.pid) ?? null
     property string identity: ""
     property bool started: false
+    property bool priming: false
+    property int primedSwaps: 0
+    property double imageReadyAt: 0
     property bool detached: model?.minimizing ?? false
     property bool finishing: false
-    property real offsetScale: model?.minimizing ? 0 : 1
+    property real offsetScale: 0
     property real dissolve: 1
     readonly property double createdAt: Date.now()
     property double startedAt: 0
@@ -32,17 +36,32 @@ Item {
     property real maxFrameMs: 0
     property real totalFrameMs: 0
     property int contentRefreshes: 0
+    property double releaseRequestedAt: 0
+    property double nativeFrameAt: 0
+    property bool handoffFallback: false
+    property bool retired: false
     readonly property real destination: model?.minimizing ? 1 : 0
-    readonly property real distance: screen.height-borderThickness+5-((model?.goalY ?? screen.y)-screen.y)
+    // Clear the entire SDF join before removing a departing surface. Five
+    // pixels outside the content clip still contribute to the border's blob.
+    readonly property real distance: screen.height-borderThickness+2*smoothing+5-((model?.goalY ?? screen.y)-screen.y)
     readonly property real gap: screen.height-2*borderThickness-panel.y-panel.height/2-
         (Math.abs(deformation.m21)*panel.width+Math.abs(deformation.m22)*panel.height)/2
 
+    function prime() {
+        if(started || priming || finishing || !capture.hasContent || !client) return;
+        priming=true;
+        imageReadyAt=Date.now();
+        primedSwaps=0;
+        root.Window.window?.update();
+    }
     function start() {
-        if(started || !capture.hasContent || !client) return;
+        if(started || finishing || primedSwaps<2 || !capture.hasContent || !client) return;
         started=true;
+        priming=false;
         startedAt=Date.now();
         captureDeadline.stop();
         WindowDrawer.claim(model);
+        updateJoin();
         offsetScale=Qt.binding(()=>root.destination);
         frames.restart();
     }
@@ -55,11 +74,18 @@ Item {
         if(finishing) return;
         finishing=true;
         settledAt=Date.now();
-        if(model?.minimizing) WindowDrawer.complete(model);
+        if(model?.minimizing) retire();
         else {
-            WindowDrawer.release(model);
-            handoff.start();
+            releaseRequestedAt=Date.now();
+            WindowDrawer.release(model,releaseRequestedAt);
+            handoffDeadline.start();
         }
+    }
+    function retire() {
+        if(retired || !model) return;
+        retired=true;
+        handoffDeadline.stop();
+        WindowDrawer.complete(model);
     }
     function info() {
         if(!model) return null;
@@ -70,18 +96,35 @@ Item {
             deform:[deformation.m11,deformation.m12,deformation.m21,deformation.m22],
             receivedAt:model.receivedAt,createdAt:createdAt,startedAt:startedAt,settledAt:settledAt,
             frameCount:frameCount,maxFrameMs:maxFrameMs,meanFrameMs:frameCount ? totalFrameMs/frameCount : 0,
-            contentRefreshes:contentRefreshes};
+            contentRefreshes:contentRefreshes,imageReadyAt:imageReadyAt,primedSwaps:primedSwaps,
+            releaseRequestedAt:releaseRequestedAt,nativeFrameAt:nativeFrameAt,
+            handoffFallback:handoffFallback,finishing:finishing,retired:retired};
     }
     onGapChanged: updateJoin()
     onDestinationChanged: {
         if(started) {
-            handoff.stop();
+            handoffDeadline.stop();
             finishing=false;
+            retired=false;
+            releaseRequestedAt=0;
+            nativeFrameAt=0;
+            handoffFallback=false;
             dissolve=1;
             frames.restart();
         }
     }
-    Behavior on offsetScale { Anim { id: slide } }
+    Behavior on offsetScale { enabled: root.started; Anim { id: slide } }
+    Connections {
+        target: root.Window.window
+        function onFrameSwapped() {
+            if(!root.priming || root.started || root.finishing) return;
+            // One swap may already have been in flight when capture became
+            // ready. The next one contains our texture and shared background.
+            root.primedSwaps++;
+            if(root.primedSwaps>=2) Qt.callLater(root.start);
+            else root.Window.window?.update();
+        }
+    }
     FrameAnimation {
         id: frames
         property real nextCaptureAt: 1/30
@@ -93,14 +136,14 @@ Item {
             }
             // Refresh client content without coupling capture throughput to a
             // high-refresh monitor. Geometry still animates at display rate.
-            if(elapsedTime>=nextCaptureAt) {
+            if((!root.model.minimizing || slide.running) && elapsedTime>=nextCaptureAt) {
                 capture.captureFrame();
                 root.contentRefreshes++;
                 nextCaptureAt=elapsedTime+1/30;
             }
             const m=root.deformation;
             const atRest=Math.abs(m.m11-1)+Math.abs(m.m12)+Math.abs(m.m21)+Math.abs(m.m22-1)<.006;
-            if(!slide.running && Math.abs(root.offsetScale-root.destination)<.0001 && (root.model.minimizing || atRest)) {
+            if(!slide.running && Math.abs(root.offsetScale-root.destination)<.0001 && atRest) {
                 stop();
                 root.detached=!root.model.minimizing;
                 root.complete();
@@ -123,7 +166,7 @@ Item {
             y: (root.model?.goalY ?? 0)-root.screen.y-root.borderThickness+root.distance*root.offsetScale
             width: root.model?.goalWidth ?? 0
             height: root.model?.goalHeight ?? 0
-            opacity: root.started ? root.dissolve : 0
+            opacity: (root.priming || root.started) ? root.dissolve : 0
             transform: Matrix4x4 { matrix: root.deformation }
             StyledClippingRect {
                 anchors.fill: parent
@@ -134,19 +177,29 @@ Item {
                     captureSource: root.client?.wayland ?? null
                     live: false
                     paintCursor: false
-                    onHasContentChanged: if(hasContent) Qt.callLater(root.start)
+                    onHasContentChanged: if(hasContent) Qt.callLater(root.prime)
                 }
             }
         }
     }
 
-    NumberAnimation {
-        id: handoff
-        target: root
-        property: "dissolve"
-        to: 0
-        duration: 80
-        onFinished: WindowDrawer.complete(root.model)
+    Connections {
+        target: WindowDrawer
+        function onPresented(frame) {
+            if(!root.finishing || root.model?.minimizing || frame.address!==root.model?.address ||
+               frame.pid!==root.model.pid || frame.token!==root.model.token || frame.releaseId!==root.releaseRequestedAt) return;
+            root.nativeFrameAt=Date.now();
+            root.retire();
+        }
+    }
+    Timer {
+        id: handoffDeadline
+        interval: 160
+        onTriggered: {
+            root.handoffFallback=true;
+            console.warn("WindowDrawer: compositor handoff acknowledgment unavailable");
+            root.retire();
+        }
     }
     Timer {
         id: captureDeadline
@@ -157,6 +210,11 @@ Item {
             root.complete();
         }
     }
-    Component.onCompleted: { identity=String(model.address); WindowDrawer.attach(identity,root); Qt.callLater(start); }
+    Component.onCompleted: {
+        offsetScale=model.minimizing ? 0 : 1;
+        identity=String(model.address);
+        WindowDrawer.attach(identity,root);
+        Qt.callLater(prime);
+    }
     Component.onDestruction: WindowDrawer.detach(identity)
 }
