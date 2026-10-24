@@ -32,8 +32,8 @@ The original regression was reproduced before the fix: after all three windows w
 
 Check these behaviors visually when changing native motion or the central:
 
-- Favorite launch uses the bottom bar beneath the clicked icon; other main application windows use the registered monitor port. Existing apps are reused.
-- Opening and minimization share a reversible `windowsMove` bubble path with temporary rounding, a connected Caelestia membrane, and a fully opaque body emerging from behind the bar. Close retains its upward departure.
+- Favorite launch projects the current bottom drawer; unarmed launches retain the compositor's normal animation. Existing apps are reused.
+- Favorite launch, minimization and hub restoration use the hover drawer's actual motion tokens and BlobRect material. The panel slides out before detaching and morphing into the window; client pixels appear only after release. Absorption reverses that path. Close retains its upward departure.
 - Restore releases the window from the bottom bar and leaves the hub and pointer available for another restore.
 - Closing a visible app shrinks upward; application close confirmation remains functional.
 - The finite window list opens at its middle entry, exposes adjacent previews at the edges, stops at both ends, and reverses smoothly while keeping stable window identities.
@@ -50,7 +50,16 @@ c++ -std=c++23 -O2 -Wall -Wextra tests/test_bubble_motion.cpp -o /tmp/bubble-mot
 /tmp/bubble-motion-test
 ```
 
-Portable checks cover endpoints, monitor offsets, positive bounds, rounding limits, full opacity, a closed endpoint behind the bar, and continuous surface intersection before detachment. Live tests check X11/Wayland opening and absorption, preserved native goals, restoration, reduced motion, reversal during minimization, close and plugin reload. No screen recording is needed.
+Portable checks cover exact endpoints, translated monitors, positive bounds, rounding limits, a fixed-size vertical reveal behind the bar, clearance before client pixels appear, alpha bounds, and continuity across material handoffs. Live native checks also cover preserved goals, reduced motion, reversal during minimization, close and plugin reload.
+
+The end-to-end surface regression temporarily adds one favorite desktop entry, operates its actual icon and restored-window preview, and removes its fixtures afterward:
+
+```sh
+sh tests/desktop/build-pointer.sh
+python3 tests/desktop/verify_surface_motion.py --live
+```
+
+It checks all three paths on Wayland and X11, delayed client visibility, surface delivery and cleanup, final geometry, an open hub and unchanged pointer after restoration, and ordinary launches remaining outside the custom path. It briefly uses workspace 918 and requires that workspace to be empty, an unlocked supported desktop and the pointer fixture's 1920×1080 single-monitor coordinates. Avoid desktop interaction while it runs. Sanitized results go to ignored `test-results/surface-motion.json`. It takes no screenshots or recordings.
 
 ## Visual demonstrations
 

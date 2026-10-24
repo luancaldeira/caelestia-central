@@ -5,6 +5,7 @@ import gi
 gi.require_version('Gtk','4.0')
 from gi.repository import Gtk,Gdk,GLib
 p=argparse.ArgumentParser();p.add_argument('--control',type=Path,required=True);p.add_argument('--veto',action='store_true');p.add_argument('--single',action='store_true');a=p.parse_args()
+GLib.set_prgname('caelestia-central-motion-test')
 app=Gtk.Application(application_id='io.github.luancaldeira.CentralMotionTest')
 windows={};seen=0
 

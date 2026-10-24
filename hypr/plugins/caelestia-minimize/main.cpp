@@ -37,6 +37,8 @@ static std::unordered_map<uintptr_t, CHyprSignalListener> listeners;
 struct BubbleFlight {
     PHLWINDOWREF window;
     PHLANIMVAR<float> progress;
+    SP<Hyprutils::Animation::SAnimationPropertyConfig> animationConfig;
+    BubbleMotion::Rect bounds;
     Vector2D fromPosition, fromSize, goalPosition, goalSize, toPosition, toSize;
     float fadeGoal = 1.F;
     float fromAlpha = 1.F;
@@ -56,6 +58,7 @@ struct LaunchOrigin {
 };
 static std::vector<LaunchOrigin> launchOrigins;
 static std::unordered_map<std::string, std::pair<Vector2D, Vector2D>> barOrigins;
+static std::unordered_map<std::string, SP<Hyprutils::Animation::SAnimationPropertyConfig>> barAnimations;
 static std::string lastLaunchAddress;
 static Vector2D lastLaunchPosition, lastLaunchSize;
 
@@ -74,9 +77,9 @@ static void bubbleEvent(uintptr_t key, BubbleFlight& flight, bool done = false) 
     const bool visible = window && window->m_workspace && window->m_workspace->isVisible();
     const auto body = window ? rect(window->positionAnimation()->value(), window->sizeAnimation()->value()) : rect(flight.toPosition, flight.toSize);
     g_pEventManager->postEvent(SHyprIPCEvent{.event = "caelestia_bubble", .data = std::format(
-        R"({{"address":"{:x}","x":{:.3f},"y":{:.3f},"width":{:.3f},"height":{:.3f},"portX":{:.3f},"portY":{:.3f},"portWidth":{:.3f},"portHeight":{:.3f},"openness":{:.4f},"visible":{},"done":{}}})",
+        R"({{"address":"{:x}","x":{:.3f},"y":{:.3f},"width":{:.3f},"height":{:.3f},"portX":{:.3f},"portY":{:.3f},"portWidth":{:.3f},"portHeight":{:.3f},"openness":{:.4f},"clientAlpha":{:.4f},"rounding":{:.3f},"visible":{},"done":{}}})",
         key, body.x, body.y, body.width, body.height, flight.toPosition.x, flight.toPosition.y, flight.toSize.x, flight.toSize.y,
-        std::clamp(flight.progress->value(), 0.F, 1.F), visible ? "true" : "false", done ? "true" : "false")});
+        std::clamp(flight.progress->value(), 0.F, 1.F), BubbleMotion::alpha(flight.progress->value()), window ? window->rounding() : 28.F, visible ? "true" : "false", done ? "true" : "false")});
 }
 
 // Read temporary rounding directly at render time without changing window rules.
@@ -94,7 +97,7 @@ static float bubbleRoundingPower(Desktop::View::CWindow* window) {
     const auto original = reinterpret_cast<Original>(roundingPowerHook->m_original)(window);
     const auto it = flights.find(reinterpret_cast<uintptr_t>(window));
     if (it == flights.end()) return original;
-    return 2.F + (original - 2.F) * BubbleMotion::smooth(.34, .88, it->second.progress->value());
+    return 2.F + (original - 2.F) * BubbleMotion::smooth(.72, 1., it->second.progress->value());
 }
 
 static std::string normalizedClass(std::string text) {
@@ -142,9 +145,26 @@ static int setBarOrigin(lua_State* L) {
     for (int i = 0; i < 4; ++i) {
         int number = 0;
         v[i] = lua_tonumberx(L, i + 2, &number);
-        valid = valid && number && std::isfinite(v[i]) && std::abs(v[i]) <= 100000 && (i < 2 || (v[i] >= 8 && v[i] <= 80));
+        valid = valid && number && std::isfinite(v[i]) && std::abs(v[i]) <= 100000 && (i < 2 || (v[i] >= 8 && v[i] <= 4096));
     }
-    if (valid) barOrigins[std::string(name, length)] = {{v[0],v[1]}, {v[2],v[3]}};
+    if (valid) {
+        const auto monitorName=std::string(name,length);
+        barOrigins[monitorName] = {{v[0],v[1]}, {v[2],v[3]}};
+        double motion[5]={500.,.38,1.21,.22,1.};
+        for(int i=0;i<5;++i) {
+            int number=0;
+            const auto value=lua_tonumberx(L,i+6,&number);
+            if(number && std::isfinite(value) && std::abs(value)<=2000.) motion[i]=value;
+        }
+        const auto curve="caelestia-drawer-"+monitorName;
+        Animation::mgr()->addBezierWithName(curve,{motion[1],motion[2]},{motion[3],motion[4]});
+        auto config=makeShared<Hyprutils::Animation::SAnimationPropertyConfig>();
+        config->internalEnabled=motion[0]>0.;
+        config->internalSpeed=std::clamp(motion[0],80.,2000.)/100.;
+        config->internalBezier=curve;
+        config->pValues=config;
+        barAnimations[monitorName]=config;
+    }
     lua_pushboolean(L, valid);
     return 1;
 }
@@ -189,17 +209,8 @@ static void animateLaunch(PHLWINDOW window, bool existing) {
         return (!existing || (pointer != o.focusedBefore && o.existing.contains(pointer))) &&
             (o.classes.contains(normalizedClass(window->m_class)) || o.classes.contains(normalizedClass(window->m_initialClass)));
     });
-    if (match == launchOrigins.end()) {
-        // Other launchers and keyboard shortcuts use the same dock origin.
-        // Transient dialogs retain their own parent's normal animation.
-        const auto monitor = window->m_monitor.lock();
-        if (existing || !monitor || window->parent() || window->m_X11DoesntWantBorders) return;
-        const auto port = barOrigins.find(monitor->m_name);
-        const auto position = port == barOrigins.end() ? Vector2D(monitor->m_position.x + monitor->m_size.x/2.-24., monitor->m_position.y + monitor->m_size.y-6.) : port->second.first;
-        const auto size = port == barOrigins.end() ? Vector2D(48.,48.) : port->second.second;
-        startBubble(window, position, size, true);
-        return;
-    }
+    // Only explicit launches from the app hub use this surface handoff.
+    if (match == launchOrigins.end()) return;
     const auto origin = *match;
     launchOrigins.erase(match);
     auto& position = window->positionAnimation();
@@ -320,14 +331,16 @@ static int restoreFrom(lua_State* L) {
     return 1;
 }
 
-// Native geometry stays full resolution. Only its presented rectangle, rounding
-// and late absorption opacity change while it joins the shell's blob surface.
+// The shell renders the moving Caelestia surface; the live client replaces it
+// after detachment, without resizing its full-resolution application buffer.
 static bool startBubble(PHLWINDOW window, Vector2D portPosition, Vector2D portSize, bool entering) {
     if (!window || !window->m_workspace || window->m_ruleApplicator->noAnim().valueOrDefault()) return false;
     auto& position = window->positionAnimation();
     auto& size = window->sizeAnimation();
     const auto monitor = window->m_monitor.lock();
     if (!monitor || !position || !size || !position->enabled() || !size->enabled()) return false;
+    const auto animation=barAnimations.find(monitor->m_name);
+    if(animation==barAnimations.end() || !animation->second->internalEnabled) return false;
     const auto key = reinterpret_cast<uintptr_t>(window.get());
     const auto existing = flights.find(key);
     if (existing != flights.end() && stillOwnsGeometry(existing->second, window)) {
@@ -346,14 +359,20 @@ static bool startBubble(PHLWINDOW window, Vector2D portPosition, Vector2D portSi
     const auto presentedSize = size->value();
     const auto presentedAlpha = window->alpha(Desktop::View::WINDOW_ALPHA_FADE)->value();
     finishFlight(key, false);
-    // The initial body belongs behind the bar, including for callers that
-    // still supply an icon or preview rectangle from an older shell version.
     const auto registered = barOrigins.find(monitor->m_name);
-    const auto center = std::clamp(portPosition.x + portSize.x / 2., monitor->m_position.x + 24., monitor->m_position.x + monitor->m_size.x - 24.);
-    portPosition = {center - 24., registered == barOrigins.end() ? monitor->m_position.y + monitor->m_size.y - 6. : registered->second.first.y};
-    portSize = {48.,48.};
+    if(registered==barOrigins.end()) return false;
+    // Current hub dimensions are supplied by modern callers. Legacy icon/card
+    // coordinates fall back to the registered compact drawer dimensions.
+    if(portSize.x<80. || portSize.y<36.) {
+        portPosition=registered->second.first;
+        portSize=registered->second.second;
+    } else {
+        portPosition.y=registered->second.first.y;
+    }
     auto& f = flights[key];
     f.window = window;
+    f.animationConfig=animation->second;
+    f.bounds={monitor->m_position.x,monitor->m_position.y,monitor->m_size.x,monitor->m_size.y};
     f.minimizing = !entering;
     f.fromPosition = entering ? position->goal() : presentedPosition;
     f.fromSize = entering ? size->goal() : presentedSize;
@@ -370,7 +389,7 @@ static bool startBubble(PHLWINDOW window, Vector2D portPosition, Vector2D portSi
     position->warp();
     size->warp();
     Animation::mgr()->createAnimation(entering ? 0.F : 1.F, f.progress,
-        Config::animationTree()->getAnimationPropertyConfig("windowsMove"), window, AVARDAMAGE_ENTIRE);
+        f.animationConfig, window, AVARDAMAGE_ENTIRE);
     const auto update = [key](auto) {
         const auto it = flights.find(key);
         if (it == flights.end()) return;
@@ -378,7 +397,7 @@ static bool startBubble(PHLWINDOW window, Vector2D portPosition, Vector2D portSi
         const auto w = f.window.lock();
         if (!stillOwnsGeometry(f, w)) return;
         const auto p = std::clamp(f.progress->value(), 0.F, 1.F);
-        const auto geometry = BubbleMotion::frame(rect(f.toPosition, f.toSize), rect(f.fromPosition, f.fromSize), p);
+        const auto geometry = BubbleMotion::frame(rect(f.toPosition, f.toSize), rect(f.fromPosition, f.fromSize), f.bounds, p);
         w->positionAnimation()->value() = {geometry.x, geometry.y};
         w->sizeAnimation()->value() = {geometry.width, geometry.height};
         w->alpha(Desktop::View::WINDOW_ALPHA_FADE)->value() = f.fromAlpha * BubbleMotion::alpha(p);
@@ -530,10 +549,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
                 finished.emplace_back(key, false);
             else {
                 // The same reversible spring drives the body and its membrane.
-                if (!flight.progress->isBeingAnimated() ||
-                    (Time::steadyNow() - flight.started > std::chrono::milliseconds(40) &&
-                     (flight.minimizing ? flight.progress->value() <= .001F : flight.progress->value() >= .999F)) ||
-                    Time::steadyNow() - flight.started > std::chrono::seconds(2))
+                if (!flight.progress->isBeingAnimated() || Time::steadyNow() - flight.started > std::chrono::seconds(3))
                     finished.emplace_back(key, flight.minimizing);
             }
         }
@@ -558,7 +574,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     for (const auto& w : Desktop::windowState()->windows())
         observe(w);
     g_pEventManager->postEvent(SHyprIPCEvent{.event="caelestia_bubble_ready",.data="1"});
-    return {"caelestia-minimize", "Native minimize and restore flights for the Caelestia hub", "luancaldeira", "1.8"};
+    return {"caelestia-minimize", "Native minimize and restore flights for the Caelestia hub", "luancaldeira", "1.9"};
 }
 
 APICALL EXPORT void PLUGIN_EXIT() {
@@ -575,6 +591,7 @@ APICALL EXPORT void PLUGIN_EXIT() {
     activated.reset();
     launchOrigins.clear();
     barOrigins.clear();
+    barAnimations.clear();
     if (closeMotionHook) { closeMotionHook->unhook(); closeMotionHook = nullptr; }
     opened.reset();
     closed.reset();

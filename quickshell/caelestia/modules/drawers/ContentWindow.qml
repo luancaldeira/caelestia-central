@@ -45,6 +45,11 @@ StyledWindow {
     readonly property real shadowOpacity: 0.7 * (1 - fsTransitionProg)
     readonly property real borderLayoutThickness: hasFullscreen ? 0 : contentItem.Config.border.thickness
 
+    readonly property int bubbleDuration: Tokens.anim.durations.expressiveDefaultSpatial
+    readonly property var bubbleCurve: TokenConfig.appearance.curves.expressiveDefaultSpatial
+    onBubbleDurationChanged: registerBubbleAnchor.restart()
+    onBubbleCurveChanged: registerBubbleAnchor.restart()
+
     property color surfaceColour: Colours.tPalette.m3surface
 
     readonly property int dragMaskPadding: {
@@ -71,7 +76,7 @@ StyledWindow {
 
     name: "drawers"
     WlrLayershell.exclusionMode: ExclusionMode.Ignore
-    WlrLayershell.layer: (windowHubActive && hasFullscreen) || (fsTransitionProg > 0 && contentItem.Config.general.showOverFullscreen) || (hasSpecialWorkspace && hasFullscreenOnNormalWs) ? WlrLayer.Overlay : WlrLayer.Top
+    WlrLayershell.layer: ((windowHubActive || WindowBubble.motions.count > 0) && hasFullscreen) || (fsTransitionProg > 0 && contentItem.Config.general.showOverFullscreen) || (hasSpecialWorkspace && hasFullscreenOnNormalWs) ? WlrLayer.Overlay : WlrLayer.Top
     WlrLayershell.keyboardFocus: screenState.launcher || screenState.session || screenState.minimized ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
     mask: hasFullscreen && !windowHubActive ? emptyRegion : regions
@@ -183,40 +188,29 @@ StyledWindow {
 
         Repeater {
             model: WindowBubble.motions
-            delegate: Item {
-                id: membrane
+            delegate: Loader {
+                id: surface
                 required property var model
-                readonly property real p: Math.max(0,Math.min(1,(model.openness-.62)/.24))
-                property real release: model.settling ? 0 : 1
-                readonly property real bloomProgress: Math.max(0,Math.min(1,model.openness/.08))
-                readonly property real bloom: .15 + .85*bloomProgress*bloomProgress*(3-2*bloomProgress)
-                readonly property real attached: (1 - p*p*(3-2*p)) * release * bloom
-                readonly property real center: model.windowX + model.windowWidth/2 - root.screen.x
-                readonly property real base: model.portY - 4 - root.screen.y
-                readonly property real gap: Math.max(0,Math.min(root.screen.height*.6,model.portY - 4 - model.windowY - model.windowHeight))
-                Behavior on release { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-                Loader {
-                    active: membrane.attached > .001 && membrane.model.portX + membrane.model.portWidth/2 >= root.screen.x &&
-                        membrane.model.portX + membrane.model.portWidth/2 < root.screen.x + root.screen.width &&
-                        membrane.model.portY + membrane.model.portHeight > root.screen.y && membrane.model.portY - 4 <= root.screen.y + root.screen.height
-                    sourceComponent: Item {
-                        BlobRect {
-                            group: blobGroup
-                            x: membrane.center - width/2
-                            y: membrane.base - height*.65
-                            implicitWidth: 124 * membrane.attached
-                            implicitHeight: 30 * membrane.attached
-                            radius: height/2
-                        }
-                        BlobRect {
-                            group: blobGroup
-                            x: membrane.center - width/2
-                            y: membrane.base - height + 4
-                            implicitWidth: (32+28*membrane.attached) * membrane.attached
-                            implicitHeight: (membrane.gap+32) * membrane.release * membrane.bloom
-                            radius: width/2
-                        }
+                active: model.clientAlpha < .999 && model.portX + model.portWidth/2 >= root.screen.x &&
+                    model.portX + model.portWidth/2 < root.screen.x + root.screen.width &&
+                    model.portY + model.portHeight > root.screen.y && model.portY - 4 <= root.screen.y + root.screen.height
+                sourceComponent: BlobRect {
+                    // Attached surfaces participate in the exact SDF used by
+                    // the hover drawers. After release, isolate the shape so
+                    // fading it cannot leave a silhouette in the border group.
+                    BlobGroup {
+                        id: detachedSurface
+                        color: root.surfaceColour
+                        smoothing: root.contentItem.Config.border.smoothing
                     }
+                    group: surface.model.openness < .72 ? blobGroup : detachedSurface
+                    x: surface.model.windowX - root.screen.x
+                    y: surface.model.windowY - root.screen.y
+                    implicitWidth: surface.model.windowWidth
+                    implicitHeight: surface.model.windowHeight
+                    radius: surface.model.rounding
+                    deformScale: (.1 * Config.appearance.deformScale) / 10000
+                    opacity: 1 - surface.model.clientAlpha
                 }
             }
         }
@@ -370,8 +364,10 @@ StyledWindow {
         id: registerBubbleAnchor
         interval: 100
         onTriggered: WindowBubble.registerBar(root.screen.name, {
-            x:root.screen.x + (root.screen.width + bar.implicitWidth - root.borderThickness)/2 - 24,
-            y:root.screen.y + root.screen.height - root.borderThickness + 4,width:48,height:48})
+            x:root.screen.x + (root.screen.width + bar.implicitWidth - root.borderThickness - panels.minimized.compactWidth)/2,
+            y:root.screen.y + root.screen.height - root.borderThickness + 4,
+            width:panels.minimized.compactWidth,height:panels.minimized.compactHeight},
+            root.bubbleDuration,root.bubbleCurve)
     }
     Connections {
         target: root
@@ -380,6 +376,11 @@ StyledWindow {
     Connections {
         target: bar
         function onImplicitWidthChanged() { registerBubbleAnchor.restart(); }
+    }
+    Connections {
+        target: panels.minimized
+        function onCompactWidthChanged() { registerBubbleAnchor.restart(); }
+        function onCompactHeightChanged() { registerBubbleAnchor.restart(); }
     }
     Connections {
         target: root.screen
