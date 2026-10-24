@@ -11,6 +11,7 @@
 #include <hyprland/src/animation/AnimationManager.hpp>
 #include <hyprland/src/managers/eventLoop/EventLoopManager.hpp>
 #include <hyprland/src/render/Renderer.hpp>
+#include <hyprland/src/managers/fullscreen/FullscreenController.hpp>
 #include <unordered_map>
 #include <algorithm>
 #include <charconv>
@@ -79,13 +80,20 @@ static bool drawerAvailable = false;
 static uint64_t drawerOwner = 0;
 static PHLWINDOW luaWindow(lua_State* L);
 
+#include "DrawerCapture.hpp"
+
 static void drawerEvent(uintptr_t key, const DrawerLease& lease, bool done = false) {
     const auto w=lease.window.lock();
     const auto monitor=w ? w->m_monitor.lock() : nullptr;
+    const auto rounding=w && Fullscreen::controller()->getFullscreenModes(w).internal!=Fullscreen::FSMODE_FULLSCREEN ? w->rounding() : 0.F;
+    const auto captured=w && DrawerCapture::enabled() ? DrawerCapture::geometry(w) : CBox{lease.goalPosition,lease.goalSize};
+    const auto leading=lease.goalPosition-captured.pos();
+    const auto trailing=captured.size()-lease.goalSize-leading;
     g_pEventManager->postEvent(SHyprIPCEvent{.event="caelestia_drawer",.data=std::format(
-        R"({{"address":"{:x}","pid":{},"token":{},"monitor":{},"x":{:.3f},"y":{:.3f},"width":{:.3f},"height":{:.3f},"minimizing":{},"done":{}}})",
+        R"({{"address":"{:x}","pid":{},"token":{},"monitor":{},"x":{:.3f},"y":{:.3f},"width":{:.3f},"height":{:.3f},"rounding":{:.3f},"captureLeft":{:.3f},"captureTop":{:.3f},"captureRight":{:.3f},"captureBottom":{:.3f},"decorated":{},"minimizing":{},"done":{}}})",
         key,w ? w->getPID() : 0,lease.token,monitor ? static_cast<int>(monitor->m_id) : -1,
-        lease.goalPosition.x,lease.goalPosition.y,lease.goalSize.x,lease.goalSize.y,
+        lease.goalPosition.x,lease.goalPosition.y,lease.goalSize.x,lease.goalSize.y,rounding,
+        leading.x,leading.y,trailing.x,trailing.y,DrawerCapture::enabled() ? "true" : "false",
         lease.minimizing ? "true" : "false",done ? "true" : "false")});
 }
 
@@ -157,6 +165,7 @@ static int enableDrawer(lua_State* L) {
     if(owner<drawerOwner) { lua_pushboolean(L,false); return 1; }
     drawerOwner=owner;
     drawerAvailable=lua_toboolean(L,1);
+    DrawerCapture::shellPid=drawerAvailable && lua_isinteger(L,3) ? static_cast<pid_t>(lua_tointeger(L,3)) : 0;
     if(!drawerAvailable) while(!drawerLeases.empty()) finishDrawer(drawerLeases.begin()->first,true);
     lua_pushboolean(L,true);
     return 1;
@@ -635,6 +644,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     closeMotionHook = HyprlandAPI::createFunctionHook(handle, functions[0].address, reinterpret_cast<void*>(&closeUp));
     if (!closeMotionHook || !closeMotionHook->hook())
         throw std::runtime_error("caelestia-minimize: cannot attach native close animation context");
+    DrawerCapture::attach(handle);
     openedLate = Event::bus()->m_events.window.openLate.listen([](PHLWINDOW w) { animateLaunch(w, false); });
     activated = Event::bus()->m_events.window.active.listen([](PHLWINDOW w, Desktop::eFocusReason) { animateLaunch(w, true); });
 
@@ -698,11 +708,12 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     for (const auto& w : Desktop::windowState()->windows())
         observe(w);
     g_pEventManager->postEvent(SHyprIPCEvent{.event="caelestia_drawer_ready",.data="1"});
-    return {"caelestia-minimize", "Native window handoff for Caelestia drawers", "luancaldeira", "2.2"};
+    return {"caelestia-minimize", "Native window handoff for Caelestia drawers", "luancaldeira", "2.4"};
 }
 
 APICALL EXPORT void PLUGIN_EXIT() {
     drawerRendered.reset();
+    DrawerCapture::detach();
     drawerAvailable=false;
     while(!drawerLeases.empty()) finishDrawer(drawerLeases.begin()->first,true);
     if (flightTimer) {

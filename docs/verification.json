@@ -1,6 +1,6 @@
 {
   "date": "2026-10-24",
-  "nativePluginVersion": "2.2",
+  "nativePluginVersion": "2.4",
   "environment": {
     "hyprland": "0.56.2",
     "caelestiaShell": "2.3.0",
@@ -578,6 +578,126 @@
         "maxAnimationFrameMs": 10.38,
         "handoffFallback": false
       }
-    ]
+    ],
+    "verificationScope": "Version 2.2 content-only checks; these did not detect the server titlebar appearing after motion. Current native-titlebar checks are below."
+  },
+  "decoratedDrawerContinuity": {
+    "nativePluginVersion": "2.4",
+    "passed": true,
+    "cause": "The normal toplevel export contained only client pixels; the native server titlebar first appeared at final handoff.",
+    "fix": "Opt in the owning shell's leased GPU exports to native decoration rendering and use matching capture extents for the panel.",
+    "unrelatedCaptureClientsUnchanged": true,
+    "contentRefreshLimitHz": 30,
+    "mainEasingAndDurationUnchanged": true,
+    "terminalPose": "The image deformation eases to identity, the extra clip reaches zero, and two final Qt swaps precede native release.",
+    "cases": [
+      {
+        "backend": "wayland",
+        "action": "open",
+        "decorated": true,
+        "captureTop": 15,
+        "sourceSize": [
+          1814,
+          1024
+        ],
+        "imageSize": [
+          1814,
+          1024
+        ],
+        "titlePixelsBefore": 245,
+        "titlePixelsAfter": 244,
+        "meanColorError": [
+          0.84375,
+          0.8747596153846153,
+          0.715625
+        ],
+        "handoffFallback": false,
+        "maxFrameMs": 12.441130999999999,
+        "meanFrameMs": 9.998363346153846
+      },
+      {
+        "backend": "wayland",
+        "action": "restore",
+        "decorated": true,
+        "captureTop": 15,
+        "sourceSize": [
+          1814,
+          1024
+        ],
+        "imageSize": [
+          1814,
+          1024
+        ],
+        "titlePixelsBefore": 244,
+        "titlePixelsAfter": 245,
+        "meanColorError": [
+          0.8949519230769231,
+          0.9105769230769231,
+          0.8235576923076923
+        ],
+        "handoffFallback": false,
+        "maxFrameMs": 10.649917,
+        "meanFrameMs": 9.995377096153844
+      },
+      {
+        "backend": "x11",
+        "action": "open",
+        "decorated": true,
+        "captureTop": 15,
+        "sourceSize": [
+          1814,
+          1024
+        ],
+        "imageSize": [
+          1814,
+          1024
+        ],
+        "titlePixelsBefore": 245,
+        "titlePixelsAfter": 245,
+        "meanColorError": [
+          0.7564903846153846,
+          0.8007211538461538,
+          0.6502403846153846
+        ],
+        "handoffFallback": false,
+        "maxFrameMs": 11.014331,
+        "meanFrameMs": 9.99838380769231
+      },
+      {
+        "backend": "x11",
+        "action": "restore",
+        "decorated": true,
+        "captureTop": 15,
+        "sourceSize": [
+          1814,
+          1024
+        ],
+        "imageSize": [
+          1814,
+          1024
+        ],
+        "titlePixelsBefore": 208,
+        "titlePixelsAfter": 245,
+        "meanColorError": [
+          1.5439903846153846,
+          1.5790865384615385,
+          1.945673076923077
+        ],
+        "handoffFallback": false,
+        "maxFrameMs": 10.870868,
+        "meanFrameMs": 10.005433490196074
+      }
+    ],
+    "regressions": {
+      "floatingGoalPreserved": true,
+      "restoreBeforeThumbnailDoesNotRecreateEntry": true,
+      "restoreCancelsActiveMinimize": true,
+      "closeDuringMinimizeClearsPanelAndEntry": true,
+      "closeIsolationCases": 6,
+      "includesRejectedClose": true
+    },
+    "visualScope": "Real Kitty windows in the installed Wayland and X11 session, with 320x13-pixel private crops of the native title text on either side of handoff. This establishes title presence and placement for those cases; it does not certify every application or exclude every possible transient.",
+    "screenRecordingUsed": false,
+    "mediaPublished": false
   }
 }

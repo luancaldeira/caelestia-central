@@ -49,7 +49,14 @@ The lock/unlock cycle was previously confirmed by the desktop owner. An automate
 
 Use real applications in addition to GTK fixtures, and test both Wayland and X11. Check the ordinary native launcher as well as favorite icons. A fixture that changes its content after the first captured frame must visibly update inside the moving surface before the native handoff. Content refresh is capped at 30 Hz; this must not lower the geometry animation's frame rate. Minimize must begin before thumbnail readback/encoding, and the thumbnail must still arrive after the window is hidden. Restore or close an entry while its thumbnail is pending to check that a late callback cannot recreate it. No screen recording is required.
 
-For continuity, keep the original default spatial easing and duration. The image must be presented in its initial pose before the native client is suppressed and the offset begins. At the other end, a constant-color fixture must retain its color across the native handoff, away from the still-open hub. `nativeFrameAt` must precede completion and `handoffFallback` must remain false. A minimized surface must clear the smoothing region and reach deformation rest before removal; it must not disappear merely because its content has crossed the clip. Also test a restore while the first image is still being prepared.
+For continuity, keep the original default spatial easing and duration. The image must be presented in its initial pose before the native client is suppressed and the offset begins. At the other end, a constant-color fixture must retain its color across the native handoff, away from the still-open hub. The final image transform must reach identity (`edgeErrorPx: 0`) across two final frame swaps before releasing the native client. A decorated export already includes the compositor's corner mask, so its additional `clipRadius` reaches zero. `nativeFrameAt` must precede completion and `handoffFallback` must remain false. A minimized surface must clear the smoothing region and reach deformation rest before removal; it must not disappear merely because its content has crossed the clip. Also test a restore while the first image is still being prepared.
+
+The title bar must travel with the client, including its native buttons. A content-only fixture cannot catch a title appearing at handoff. With hyprbars and a light title enabled, the opt-in regression below opens a unique Kitty window, minimizes it and restores it from the hub. It checks title glyphs before and after handoff using temporary 320×13-pixel crops. It retains only numeric results, closes only its own window, and restores the workspace, hub and pointer. It requires Pillow and grim.
+
+```sh
+python tests/desktop/verify_drawer_titlebar.py --live --backend wayland
+python tests/desktop/verify_drawer_titlebar.py --live --backend x11
+```
 
 ## Visual demonstrations
 

@@ -19,7 +19,7 @@ Singleton {
     function dispatch(method, values) {
         Hypr.dispatch(`function() local p=hl.plugin.caelestia_minimize; if p and p.${method} then p.${method}(${values.join(",")}) end end`);
     }
-    function register() { dispatch("enable_drawer", [ShellState.sessionLocked ? "false" : "true",generation]); }
+    function register() { dispatch("enable_drawer", [ShellState.sessionLocked ? "false" : "true",generation,Quickshell.processId]); }
     function indexOf(address) {
         for(let i=0;i<motions.count;i++) if(motions.get(i).address===address) return i;
         return -1;
@@ -42,7 +42,10 @@ Singleton {
             if(![frame.pid,frame.token,frame.monitor,frame.x,frame.y,frame.width,frame.height].every(Number.isFinite) || frame.width<8 || frame.height<8) return;
             if(ShellState.sessionLocked) { complete(frame); return; }
             const values={address:frame.address,pid:frame.pid,token:frame.token,monitor:frame.monitor,
-                goalX:frame.x,goalY:frame.y,goalWidth:frame.width,goalHeight:frame.height,minimizing:frame.minimizing};
+                goalX:frame.x,goalY:frame.y,goalWidth:frame.width,goalHeight:frame.height,minimizing:frame.minimizing,
+                goalRounding:Number.isFinite(frame.rounding) ? Math.max(0,frame.rounding) : -1,
+                decorated:frame.decorated===true,captureLeft:frame.captureLeft ?? 0,captureTop:frame.captureTop ?? 0,
+                captureRight:frame.captureRight ?? 0,captureBottom:frame.captureBottom ?? 0};
             if(index>=0 && motions.get(index).token!==frame.token) motions.remove(index);
             const current=indexOf(frame.address);
             if(current>=0) motions.set(current,values);
@@ -56,7 +59,10 @@ Singleton {
         dispatch("complete_drawer", [JSON.stringify(model.address),model.pid,model.token]);
     }
     function attach(address,panel) { panels=Object.assign({},panels,{[address]:panel}); }
-    function detach(address) { const next=Object.assign({},panels); delete next[address]; panels=next; }
+    function detach(address,panel) {
+        if(panels[address]!==panel) return;
+        const next=Object.assign({},panels); delete next[address]; panels=next;
+    }
     Connections {
         target: Hyprland
         function onRawEvent(event) {

@@ -293,7 +293,7 @@ StyledWindow {
                     sourceComponent: PanelBg {
                         panel: drawer.panel
                         deformAmount: .1
-                        opacity: drawer.dissolve
+                        opacity: drawer.backingOpacity
                         group: drawer.detached ? releasedGroup : blobGroup
                     }
                 }
