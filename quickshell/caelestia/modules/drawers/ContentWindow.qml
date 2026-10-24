@@ -181,6 +181,44 @@ StyledWindow {
             borderBottom: root.borderThickness - anchors.margins - root.sdfBorderOffset
         }
 
+        Repeater {
+            model: WindowBubble.motions
+            delegate: Item {
+                id: membrane
+                required property var model
+                readonly property real p: Math.max(0,Math.min(1,(model.openness-.12)/.42))
+                property real release: model.settling ? 0 : 1
+                readonly property real attached: (1 - p*p*(3-2*p)) * release
+                readonly property real center: model.portX + model.portWidth/2 - root.screen.x
+                readonly property real base: model.portY + model.portHeight - root.screen.y
+                readonly property real gap: Math.max(0,Math.min(96,model.portY + model.portHeight - model.windowY - model.windowHeight))
+                Behavior on release { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+                Loader {
+                    active: membrane.attached > .001 && membrane.model.portX + membrane.model.portWidth/2 >= root.screen.x &&
+                        membrane.model.portX + membrane.model.portWidth/2 < root.screen.x + root.screen.width &&
+                        membrane.model.portY + membrane.model.portHeight > root.screen.y && membrane.model.portY < root.screen.y + root.screen.height
+                    sourceComponent: Item {
+                        BlobRect {
+                            group: blobGroup
+                            x: membrane.center - width/2
+                            y: membrane.base - height*.65
+                            implicitWidth: 124 * membrane.attached
+                            implicitHeight: 30 * membrane.attached
+                            radius: height/2
+                        }
+                        BlobRect {
+                            group: blobGroup
+                            x: membrane.center - width/2
+                            y: membrane.base - height + 4
+                            implicitWidth: (32+28*membrane.attached) * membrane.attached
+                            implicitHeight: (membrane.gap+32) * membrane.attached
+                            radius: width/2
+                        }
+                    }
+                }
+            }
+        }
+
         PanelBg {
             id: dashBg
 
@@ -325,6 +363,30 @@ StyledWindow {
             fullscreen: root.hasFullscreen
         }
     }
+
+    Timer {
+        id: registerBubbleAnchor
+        interval: 100
+        onTriggered: WindowBubble.registerBar(root.screen.name, {
+            x:root.screen.x + (root.screen.width + bar.implicitWidth - root.borderThickness)/2 - 24,
+            y:root.screen.y + root.screen.height - root.borderThickness - 48,width:48,height:48})
+    }
+    Connections {
+        target: root
+        function onBorderThicknessChanged() { registerBubbleAnchor.restart(); }
+    }
+    Connections {
+        target: bar
+        function onImplicitWidthChanged() { registerBubbleAnchor.restart(); }
+    }
+    Connections {
+        target: root.screen
+        function onWidthChanged() { registerBubbleAnchor.restart(); }
+        function onHeightChanged() { registerBubbleAnchor.restart(); }
+        function onXChanged() { registerBubbleAnchor.restart(); }
+        function onYChanged() { registerBubbleAnchor.restart(); }
+    }
+    Component.onCompleted: registerBubbleAnchor.start()
 
     MinimizedPanel.ThumbnailCapture { screen: root.screen }
 

@@ -76,16 +76,13 @@ Item {
     function closeCurrent() {
         if (activeTab === 1 && currentEntry) windows.requestSecondary(currentEntry);
     }
-    // Project the selected cover's resting slot even while this panel is closed.
-    // Removing the slide offset keeps minimizing aimed at the same place as restoring.
-    function minimizeTarget() {
+    function bubbleOrigin(centerX) {
         const bottom = mapToItem(null,width / 2,height);
-        const panelHeight = Math.min(windowPanelHeight,screen.height - 160);
-        const coverWidth = Math.max(80,Math.min(windowPanelWidth,screen.width - 100) - windows.sideInset * 2);
-        return {x:screen.x + bottom.x - coverWidth / 2,
-            y:screen.y + bottom.y - (implicitHeight + 5) * offsetScale - panelHeight + 20,
-            width:coverWidth,height:Math.max(48,Math.min(coverWidth * 9 / 16,panelHeight - 148))};
+        const base = screen.y + bottom.y - (implicitHeight + 5) * offsetScale;
+        const center = Number.isFinite(centerX) ? centerX : screen.x + bottom.x;
+        return {x:Math.max(screen.x,Math.min(screen.x+screen.width-48,center-24)),y:base-48,width:48,height:48};
     }
+    function minimizeTarget() { return bubbleOrigin(); }
     function info() {
         return JSON.stringify({open:shouldBeActive,tab:activeTab,width:width,height:height,count:count,
             selected:activeTab === 1 ? currentEntry?.address : currentEntry?.id,

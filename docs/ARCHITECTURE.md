@@ -8,7 +8,7 @@
 
 The wallpaper carousel keeps its final screen-bounded dimensions inside a clipped viewport while the panel opens. Cover dimensions, image crops and orbit spacing remain stable throughout the expansion.
 
-`MiniApplications.qml` displays raw favorite icons. `ApplicationLibrary.qml` reads desktop entries and preserves native DesktopEntry launch semantics, including D-Bus activation, working directories, and arguments. An optional icon origin arms a short-lived native launch intent. Matching existing windows are reused; minimized matches go through the regular restore service.
+`MiniApplications.qml` displays raw favorite icons. `ApplicationLibrary.qml` reads desktop entries and preserves native DesktopEntry launch semantics, including D-Bus activation, working directories, and arguments. The icon's horizontal position and the bar's surface anchor arm a short-lived native launch intent. Matching existing windows are reused; minimized matches go through the regular restore service.
 
 ## Minimized-window lifecycle
 
@@ -20,7 +20,11 @@ The native plugin listens for client minimize requests in XDG-shell and XWayland
 
 ## Native motion
 
-The extension animates presented window geometry while keeping the compositor's layout goals and the client surface resolution intact. Minimize and close share a single departure-geometry helper: the same proportional shrink, size cap and horizontal center, with opposite screen edges. Both use `windowsOut` for geometry and `fadeOut` for opacity, including the configured curves and independent durations. At the end of minimizing, it masks the move to the hidden workspace to avoid a second fade or a full-size flash. Restoration starts at the actual preview or clicked app icon. Interrupted minimize flights retain their current presented geometry.
+The extension animates presented window geometry while keeping layout goals and client surface resolution intact. `BubbleMotion.hpp` describes a reversible path from a 48 px port at the bottom bar to the full window. Its lower edge stays attached briefly while the body expands, with restrained stretch, temporary roundness and opacity changes confined to the small port. A single native `windowsMove` spring drives opening, restoration and minimization. Redirecting an existing flight preserves that animated variable and its spring velocity. Restoring during absorption immediately clears its minimized entry.
+
+The shell registers exact per-monitor bar anchors, including border/fullscreen changes. Favorite launches use the clicked icon's horizontal position; other main application windows use the monitor's registered central port. Transient dialogs retain their parent's normal animation. Temporary render hooks supply rounding and rounding power only while a flight exists; they do not write window rules. The final move to the hidden workspace is masked to avoid a full-size flash.
+
+`WindowBubble.qml` receives throttled presentation events and updates stable model rows. Two small blobs join the existing Caelestia `BlobGroup`, using its surface color, translucency and smoothing. The membrane relaxes for 180 ms after absorption. Its layer receives no additional input region. Expiry, close, interruption, plugin reload and session lock remove stale shapes; no polling timer remains active while idle. Off-workspace flights do not create visible membrane effects.
 
 Closing hooks the compositor's native `CWindowAnimationController::animateOut` context, after the client really closes. The snapshot shrinks upward; the close request itself is not delayed. There is no per-frame renderer hook. The complete ABI hash and the target symbol are checked before hooks are installed, and hooks/listeners are removed on unload.
 

@@ -117,6 +117,9 @@ Singleton {
         // Keep the layer surface focused for successive restores. Focusing a
         // client here also warps the pointer and clears the shell focus grab.
         if (!keepHub) commands.push(`hl.dsp.focus({window=${selector(a)}})`);
+        const screen = Screens.screens.find(s => s.name === record.monitor);
+        const panel = screen ? ShellState.componentsFor(screen)?.panels?.minimized : null;
+        if (panel) origin = panel.bubbleOrigin(origin ? origin.x + origin.width / 2 : undefined);
         const animate = origin && !ShellState.sessionLocked && Hypr.usingLua &&
             [origin.x,origin.y,origin.width,origin.height].every(Number.isFinite) && origin.width >= 8 && origin.height >= 8;
         if (Hypr.usingLua) {

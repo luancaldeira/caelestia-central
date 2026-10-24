@@ -18,6 +18,8 @@
 #include <unordered_set>
 #include <cctype>
 #include <utility>
+#include <hyprland/src/desktop/Workspace.hpp>
+#include "BubbleMotion.hpp"
 
 extern "C" {
 #include <lua.h>
@@ -28,19 +30,21 @@ extern "C" {
 // native snapshot animation context, after the application has actually closed.
 static CHyprSignalListener opened, closed, openedLate, activated;
 static CFunctionHook* closeMotionHook = nullptr;
+static CFunctionHook* roundingHook = nullptr;
+static CFunctionHook* roundingPowerHook = nullptr;
 static std::unordered_map<uintptr_t, CHyprSignalListener> listeners;
 
-struct MinimizeFlight {
+struct BubbleFlight {
     PHLWINDOWREF window;
     PHLANIMVAR<float> progress;
-    PHLANIMVAR<float> fadeProgress;
     Vector2D fromPosition, fromSize, goalPosition, goalSize, toPosition, toSize;
     float fadeGoal = 1.F;
     float fromAlpha = 1.F;
     std::string workspace;
-    Time::steady_tp started;
+    Time::steady_tp started, lastEvent;
+    bool minimizing = true;
 };
-static std::unordered_map<uintptr_t, MinimizeFlight> flights;
+static std::unordered_map<uintptr_t, BubbleFlight> flights;
 static SP<CEventLoopTimer> flightTimer;
 
 struct LaunchOrigin {
@@ -51,8 +55,47 @@ struct LaunchOrigin {
     uintptr_t focusedBefore = 0;
 };
 static std::vector<LaunchOrigin> launchOrigins;
+static std::unordered_map<std::string, std::pair<Vector2D, Vector2D>> barOrigins;
 static std::string lastLaunchAddress;
 static Vector2D lastLaunchPosition, lastLaunchSize;
+
+static bool startBubble(PHLWINDOW window, Vector2D portPosition, Vector2D portSize, bool entering);
+static void finishFlight(uintptr_t key, bool hide);
+
+static BubbleMotion::Rect rect(const Vector2D& position, const Vector2D& size) {
+    return {position.x, position.y, size.x, size.y};
+}
+
+static void bubbleEvent(uintptr_t key, BubbleFlight& flight, bool done = false) {
+    const auto window = flight.window.lock();
+    const auto now = Time::steadyNow();
+    if (!done && now - flight.lastEvent < std::chrono::milliseconds(16)) return;
+    flight.lastEvent = now;
+    const bool visible = window && window->m_workspace && window->m_workspace->isVisible();
+    const auto body = window ? rect(window->positionAnimation()->value(), window->sizeAnimation()->value()) : rect(flight.toPosition, flight.toSize);
+    g_pEventManager->postEvent(SHyprIPCEvent{.event = "caelestia_bubble", .data = std::format(
+        R"({{"address":"{:x}","x":{:.3f},"y":{:.3f},"width":{:.3f},"height":{:.3f},"portX":{:.3f},"portY":{:.3f},"portWidth":{:.3f},"portHeight":{:.3f},"openness":{:.4f},"visible":{},"done":{}}})",
+        key, body.x, body.y, body.width, body.height, flight.toPosition.x, flight.toPosition.y, flight.toSize.x, flight.toSize.y,
+        std::clamp(flight.progress->value(), 0.F, 1.F), visible ? "true" : "false", done ? "true" : "false")});
+}
+
+// Read temporary rounding directly at render time without changing window rules.
+static float bubbleRounding(Desktop::View::CWindow* window) {
+    using Original = float (*)(Desktop::View::CWindow*);
+    const auto original = reinterpret_cast<Original>(roundingHook->m_original)(window);
+    const auto it = flights.find(reinterpret_cast<uintptr_t>(window));
+    if (it == flights.end()) return original;
+    return BubbleMotion::rounding(rect(window->positionAnimation()->value(), window->sizeAnimation()->value()),
+                                 it->second.progress->value(), original);
+}
+
+static float bubbleRoundingPower(Desktop::View::CWindow* window) {
+    using Original = float (*)(Desktop::View::CWindow*);
+    const auto original = reinterpret_cast<Original>(roundingPowerHook->m_original)(window);
+    const auto it = flights.find(reinterpret_cast<uintptr_t>(window));
+    if (it == flights.end()) return original;
+    return 2.F + (original - 2.F) * BubbleMotion::smooth(.08, .72, it->second.progress->value());
+}
 
 static std::string normalizedClass(std::string text) {
     std::ranges::transform(text, text.begin(), [](unsigned char c) { return std::tolower(c); });
@@ -64,8 +107,7 @@ struct DepartureGeometry {
     Vector2D position, size;
 };
 
-// Minimize and close share the same shrink and horizontal center. Only the
-// screen edge changes; both end twelve logical pixels outside the monitor.
+// Closing retains its upward departure; minimizing uses the dock bubble path.
 static DepartureGeometry departureGeometry(PHLMONITOR monitor, const Vector2D& position, const Vector2D& size, bool downward) {
     const auto scale = std::min({0.16, 160. / std::max(1., size.x), 100. / std::max(1., size.y)});
     const auto targetSize = (size * scale).clamp({8,8}, size);
@@ -90,6 +132,21 @@ static Animation::SViewAnimationContext closeUp(const Desktop::View::CWindowAnim
         break;
     }
     return context;
+}
+
+static int setBarOrigin(lua_State* L) {
+    size_t length = 0;
+    const auto name = lua_tolstring(L, 1, &length);
+    double v[4] = {};
+    bool valid = name && length > 0 && length < 256;
+    for (int i = 0; i < 4; ++i) {
+        int number = 0;
+        v[i] = lua_tonumberx(L, i + 2, &number);
+        valid = valid && number && std::isfinite(v[i]) && std::abs(v[i]) <= 100000 && (i < 2 || (v[i] >= 8 && v[i] <= 80));
+    }
+    if (valid) barOrigins[std::string(name, length)] = {{v[0],v[1]}, {v[2],v[3]}};
+    lua_pushboolean(L, valid);
+    return 1;
 }
 
 static int prepareLaunch(lua_State* L) {
@@ -132,17 +189,23 @@ static void animateLaunch(PHLWINDOW window, bool existing) {
         return (!existing || (pointer != o.focusedBefore && o.existing.contains(pointer))) &&
             (o.classes.contains(normalizedClass(window->m_class)) || o.classes.contains(normalizedClass(window->m_initialClass)));
     });
-    if (match == launchOrigins.end()) return;
+    if (match == launchOrigins.end()) {
+        // Other launchers and keyboard shortcuts use the same dock origin.
+        // Transient dialogs retain their own parent's normal animation.
+        const auto monitor = window->m_monitor.lock();
+        if (existing || !monitor || window->parent() || window->m_X11DoesntWantBorders) return;
+        const auto port = barOrigins.find(monitor->m_name);
+        const auto position = port == barOrigins.end() ? Vector2D(monitor->m_position.x + monitor->m_size.x/2.-24., monitor->m_position.y + monitor->m_size.y-58.) : port->second.first;
+        const auto size = port == barOrigins.end() ? Vector2D(48.,48.) : port->second.second;
+        startBubble(window, position, size, true);
+        return;
+    }
     const auto origin = *match;
     launchOrigins.erase(match);
     auto& position = window->positionAnimation();
     auto& size = window->sizeAnimation();
     if (!position || !size || !position->enabled() || !size->enabled() || window->m_ruleApplicator->noAnim().valueOrDefault()) return;
-    position->setConfig(Config::animationTree()->getAnimationPropertyConfig("windowsMove"));
-    size->setConfig(Config::animationTree()->getAnimationPropertyConfig("windowsMove"));
-    position->setValue(origin.position);
-    size->setValue(origin.size);
-    window->alpha(Desktop::View::WINDOW_ALPHA_FADE)->setValueAndWarp(1.F);
+    if (!startBubble(window, origin.position, origin.size, true)) return;
     lastLaunchAddress = std::format("{:x}", pointer);
     lastLaunchPosition = origin.position;
     lastLaunchSize = origin.size;
@@ -157,7 +220,7 @@ static int launchState(lua_State* L) {
     return 1;
 }
 
-static bool stillOwnsGeometry(const MinimizeFlight& flight, PHLWINDOW window) {
+static bool stillOwnsGeometry(const BubbleFlight& flight, PHLWINDOW window) {
     return window && window->m_isMapped && window->m_workspace && window->m_workspace->m_name == flight.workspace &&
         window->positionAnimation()->goal() == flight.goalPosition && window->sizeAnimation()->goal() == flight.goalSize;
 }
@@ -167,10 +230,9 @@ static void finishFlight(uintptr_t key, bool hide) {
     if (node.empty())
         return;
     auto& flight = node.mapped();
+    bubbleEvent(key, flight, true);
     flight.progress->resetAllCallbacks();
     flight.progress->warp();
-    flight.fadeProgress->resetAllCallbacks();
-    flight.fadeProgress->warp();
     const auto window = flight.window.lock();
     if (!window || !window->m_isMapped)
         return;
@@ -207,7 +269,8 @@ static void finishFlight(uintptr_t key, bool hide) {
         fade->setValueAndWarp(flight.fadeGoal);
         fade->setValue(presentedAlpha);
     }
-    g_pEventManager->postEvent(SHyprIPCEvent{.event = "caelestia_minimize_done", .data = std::format("{:x},{},{}", key, window->getPID(), hide ? 1 : 0)});
+    if (flight.minimizing)
+        g_pEventManager->postEvent(SHyprIPCEvent{.event = "caelestia_minimize_done", .data = std::format("{:x},{},{}", key, window->getPID(), hide ? 1 : 0)});
 }
 
 static PHLWINDOW luaWindow(lua_State* L) {
@@ -253,25 +316,82 @@ static int restoreFrom(lua_State* L) {
     std::erase_if(launchOrigins, [&](const auto& origin) {
         return origin.classes.contains(normalizedClass(window->m_class)) || origin.classes.contains(normalizedClass(window->m_initialClass));
     });
-    const bool interrupted = flights.contains(reinterpret_cast<uintptr_t>(window.get()));
-    const auto presentedPosition = position->value();
-    const auto presentedSize = size->value();
-    const auto presentedAlpha = window->alpha(Desktop::View::WINDOW_ALPHA_FADE)->value();
-    finishFlight(reinterpret_cast<uintptr_t>(window.get()), false);
-    // setValue changes the current value, preserving the layout's goal, curve,
-    // callbacks and final client size. The compositor animates live content.
-    position->setValue(interrupted ? presentedPosition : Vector2D(values[0], values[1]));
-    size->setValue(interrupted ? presentedSize : Vector2D(values[2], values[3]));
-    if (interrupted)
-        window->alpha(Desktop::View::WINDOW_ALPHA_FADE)->setValue(presentedAlpha);
-    else
-        window->alpha(Desktop::View::WINDOW_ALPHA_FADE)->setValueAndWarp(1.F);
-    lua_pushboolean(L, true);
+    lua_pushboolean(L, startBubble(window, {values[0], values[1]}, {values[2], values[3]}, true));
     return 1;
 }
 
-// Animate only the presented geometry. Keeping the native goals unchanged also
-// keeps the application's surface at full resolution throughout the shrink.
+// Native geometry stays full resolution. Only its presented rectangle, rounding
+// and late absorption opacity change while it joins the shell's blob surface.
+static bool startBubble(PHLWINDOW window, Vector2D portPosition, Vector2D portSize, bool entering) {
+    if (!window || !window->m_workspace || window->m_ruleApplicator->noAnim().valueOrDefault()) return false;
+    auto& position = window->positionAnimation();
+    auto& size = window->sizeAnimation();
+    const auto monitor = window->m_monitor.lock();
+    if (!monitor || !position || !size || !position->enabled() || !size->enabled()) return false;
+    const auto key = reinterpret_cast<uintptr_t>(window.get());
+    const auto existing = flights.find(key);
+    if (existing != flights.end() && stillOwnsGeometry(existing->second, window)) {
+        // Redirect the same animated variable, preserving its current value and
+        // spring velocity rather than restarting at an endpoint.
+        auto& f = existing->second;
+        if (entering && f.minimizing)
+            g_pEventManager->postEvent(SHyprIPCEvent{.event = "caelestia_minimize_done", .data = std::format("{:x},{},0", key, window->getPID())});
+        f.minimizing = !entering;
+        f.started = Time::steadyNow();
+        *f.progress = entering ? 1.F : 0.F;
+        flightTimer->updateTimeout(std::chrono::milliseconds(8));
+        return true;
+    }
+    const auto presentedPosition = position->value();
+    const auto presentedSize = size->value();
+    const auto presentedAlpha = window->alpha(Desktop::View::WINDOW_ALPHA_FADE)->value();
+    finishFlight(key, false);
+    // Older shell versions pass a whole preview. Anchor those at the bottom
+    // bar as well; modern callers supply its exact screen-scaled port.
+    if (portSize.x > 80. || portSize.y > 80.) {
+        portPosition = {portPosition.x + portSize.x / 2. - 24., monitor->m_position.y + monitor->m_size.y - 58.};
+        portSize = {48., 48.};
+    }
+    auto& f = flights[key];
+    f.window = window;
+    f.minimizing = !entering;
+    f.fromPosition = entering ? position->goal() : presentedPosition;
+    f.fromSize = entering ? size->goal() : presentedSize;
+    f.goalPosition = position->goal();
+    f.goalSize = size->goal();
+    f.toPosition = portPosition;
+    f.toSize = portSize;
+    f.workspace = window->m_workspace->m_name;
+    f.started = Time::steadyNow();
+    auto& fade = window->alpha(Desktop::View::WINDOW_ALPHA_FADE);
+    f.fadeGoal = fade->goal();
+    f.fromAlpha = entering ? f.fadeGoal : presentedAlpha;
+    fade->setValueAndWarp(f.fadeGoal);
+    position->warp();
+    size->warp();
+    Animation::mgr()->createAnimation(entering ? 0.F : 1.F, f.progress,
+        Config::animationTree()->getAnimationPropertyConfig("windowsMove"), window, AVARDAMAGE_ENTIRE);
+    const auto update = [key](auto) {
+        const auto it = flights.find(key);
+        if (it == flights.end()) return;
+        auto& f = it->second;
+        const auto w = f.window.lock();
+        if (!stillOwnsGeometry(f, w)) return;
+        const auto p = std::clamp(f.progress->value(), 0.F, 1.F);
+        const auto geometry = BubbleMotion::frame(rect(f.toPosition, f.toSize), rect(f.fromPosition, f.fromSize), p);
+        w->positionAnimation()->value() = {geometry.x, geometry.y};
+        w->sizeAnimation()->value() = {geometry.width, geometry.height};
+        w->alpha(Desktop::View::WINDOW_ALPHA_FADE)->value() = f.fromAlpha * BubbleMotion::alpha(p);
+        w->updateWindowDecos();
+        bubbleEvent(key, f);
+    };
+    f.progress->setUpdateCallback(update);
+    update(nullptr);
+    *f.progress = entering ? 1.F : 0.F;
+    flightTimer->updateTimeout(std::chrono::milliseconds(8));
+    return true;
+}
+
 static int minimizeTo(lua_State* L) {
     const auto window = luaWindow(L);
     if (!window || window->isHidden() || !window->m_workspace || window->m_workspace->m_name == "special:caelestia-minimized") {
@@ -287,71 +407,7 @@ static int minimizeTo(lua_State* L) {
             return 1;
         }
     }
-    auto& position = window->positionAnimation();
-    auto& size = window->sizeAnimation();
-    if (!position || !size || !position->enabled() || !size->enabled()) {
-        lua_pushboolean(L, false);
-        return 1;
-    }
-    const auto key = reinterpret_cast<uintptr_t>(window.get());
-    if (flights.contains(key)) {
-        lua_pushboolean(L, true);
-        return 1;
-    }
-    const auto monitor = window->m_monitor.lock();
-    if (!monitor || window->m_ruleApplicator->noAnim().valueOrDefault()) {
-        lua_pushboolean(L, false);
-        return 1;
-    }
-    auto& flight = flights[key];
-    flight.window = window;
-    flight.fromPosition = position->value();
-    flight.fromSize = size->value();
-    flight.goalPosition = position->goal();
-    flight.goalSize = size->goal();
-    // The legacy hub rectangle remains accepted above for shell compatibility.
-    // Departure now mirrors close instead of shrinking into that rectangle.
-    const auto departure = departureGeometry(monitor, flight.fromPosition, flight.fromSize, true);
-    flight.toPosition = departure.position;
-    flight.toSize = departure.size;
-    flight.workspace = window->m_workspace->m_name;
-    flight.started = Time::steadyNow();
-    auto& fade = window->alpha(Desktop::View::WINDOW_ALPHA_FADE);
-    flight.fadeGoal = fade->goal();
-    flight.fromAlpha = fade->value();
-    fade->setValueAndWarp(flight.fadeGoal);
-    fade->value() = flight.fromAlpha;
-    position->warp();
-    size->warp();
-    position->value() = flight.fromPosition;
-    size->value() = flight.fromSize;
-    Animation::mgr()->createAnimation(0.F, flight.progress, Config::animationTree()->getAnimationPropertyConfig("windowsOut"), window, AVARDAMAGE_ENTIRE);
-    Animation::mgr()->createAnimation(0.F, flight.fadeProgress, Config::animationTree()->getAnimationPropertyConfig("fadeOut"), window, AVARDAMAGE_ENTIRE);
-    flight.progress->setUpdateCallback([key](auto) {
-        const auto it = flights.find(key);
-        if (it == flights.end())
-            return;
-        auto& f = it->second;
-        const auto w = f.window.lock();
-        if (!stillOwnsGeometry(f, w))
-            return;
-        const auto progress = std::clamp(f.progress->value(), 0.F, 1.F);
-        w->positionAnimation()->value() = f.fromPosition + (f.toPosition - f.fromPosition) * progress;
-        w->sizeAnimation()->value() = f.fromSize + (f.toSize - f.fromSize) * progress;
-        w->updateWindowDecos();
-    });
-    flight.fadeProgress->setUpdateCallback([key](auto) {
-        const auto it = flights.find(key);
-        if (it == flights.end()) return;
-        auto& f = it->second;
-        const auto w = f.window.lock();
-        if (stillOwnsGeometry(f, w))
-            w->alpha(Desktop::View::WINDOW_ALPHA_FADE)->value() = f.fromAlpha * (1.F - std::clamp(f.fadeProgress->value(), 0.F, 1.F));
-    });
-    *flight.progress = 1.F;
-    *flight.fadeProgress = 1.F;
-    flightTimer->updateTimeout(std::chrono::milliseconds(8));
-    lua_pushboolean(L, true);
+    lua_pushboolean(L, startBubble(window, {values[0], values[1]}, {values[2], values[3]}, false));
     return 1;
 }
 
@@ -386,6 +442,8 @@ static int animationState(lua_State* L) {
     const auto field = [L](const char* name, double value) { lua_pushnumber(L, value); lua_setfield(L, -2, name); };
     field("x", position.x); field("y", position.y); field("width", size.x); field("height", size.y);
     field("targetX", targetPosition.x); field("targetY", targetPosition.y); field("targetWidth", targetSize.x); field("targetHeight", targetSize.y);
+    field("rounding", window->rounding());
+    field("roundingPower", window->roundingPower());
     lua_pushboolean(L, window->positionAnimation()->isBeingAnimated() || window->sizeAnimation()->isBeingAnimated() || flights.contains(reinterpret_cast<uintptr_t>(window.get())));
     lua_setfield(L, -2, "animating");
     field("fadeAlpha", window->alpha(Desktop::View::WINDOW_ALPHA_FADE)->value());
@@ -393,6 +451,7 @@ static int animationState(lua_State* L) {
     field("movingFromMonitor", window->m_monitorMovedFrom);
     const auto flight = flights.find(reinterpret_cast<uintptr_t>(window.get()));
     field("minimizeProgress", flight == flights.end() ? -1 : flight->second.progress->value());
+    if (flight != flights.end()) { field("portX", flight->second.toPosition.x); field("portY", flight->second.toPosition.y); }
     lua_pushboolean(L, window->alpha(Desktop::View::WINDOW_ALPHA_MOVE_TO_WORKSPACE)->isBeingAnimated());
     lua_setfield(L, -2, "workspaceFading");
     return 1;
@@ -443,7 +502,8 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
         !HyprlandAPI::addLuaFunction(handle, "caelestia_minimize", "minimize_to", minimizeTo) ||
         !HyprlandAPI::addLuaFunction(handle, "caelestia_minimize", "cancel_minimize", cancelMinimize) ||
         !HyprlandAPI::addLuaFunction(handle, "caelestia_minimize", "prepare_launch", prepareLaunch) ||
-        !HyprlandAPI::addLuaFunction(handle, "caelestia_minimize", "launch_state", launchState))
+        !HyprlandAPI::addLuaFunction(handle, "caelestia_minimize", "launch_state", launchState) ||
+        !HyprlandAPI::addLuaFunction(handle, "caelestia_minimize", "set_bar_origin", setBarOrigin))
         throw std::runtime_error("caelestia-minimize: could not register restoration API");
     const auto functions = HyprlandAPI::findFunctionsByName(handle, "_ZNK7Desktop4View26CWindowAnimationController10animateOutEv");
     if (functions.size() != 1)
@@ -451,6 +511,14 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     closeMotionHook = HyprlandAPI::createFunctionHook(handle, functions[0].address, reinterpret_cast<void*>(&closeUp));
     if (!closeMotionHook || !closeMotionHook->hook())
         throw std::runtime_error("caelestia-minimize: cannot attach native close animation context");
+    const auto roundingFunctions = HyprlandAPI::findFunctionsByName(handle, "_ZN7Desktop4View7CWindow8roundingEv");
+    const auto powerFunctions = HyprlandAPI::findFunctionsByName(handle, "_ZN7Desktop4View7CWindow13roundingPowerEv");
+    if (roundingFunctions.size() != 1 || powerFunctions.size() != 1)
+        throw std::runtime_error("caelestia-minimize: cannot locate bubble rounding methods");
+    roundingHook = HyprlandAPI::createFunctionHook(handle, roundingFunctions[0].address, reinterpret_cast<void*>(&bubbleRounding));
+    roundingPowerHook = HyprlandAPI::createFunctionHook(handle, powerFunctions[0].address, reinterpret_cast<void*>(&bubbleRoundingPower));
+    if (!roundingHook || !roundingPowerHook || !roundingHook->hook() || !roundingPowerHook->hook())
+        throw std::runtime_error("caelestia-minimize: cannot attach bubble rounding methods");
     openedLate = Event::bus()->m_events.window.openLate.listen([](PHLWINDOW w) { animateLaunch(w, false); });
     activated = Event::bus()->m_events.window.active.listen([](PHLWINDOW w, Desktop::eFocusReason) { animateLaunch(w, true); });
 
@@ -461,9 +529,12 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
             if (!stillOwnsGeometry(flight, window))
                 finished.emplace_back(key, false);
             else {
-                // Match native close's independent geometry and opacity clocks.
-                if ((!flight.progress->isBeingAnimated() && !flight.fadeProgress->isBeingAnimated()) || Time::steadyNow() - flight.started > std::chrono::seconds(2))
-                    finished.emplace_back(key, true);
+                // The same reversible spring drives the body and its membrane.
+                if (!flight.progress->isBeingAnimated() ||
+                    (Time::steadyNow() - flight.started > std::chrono::milliseconds(40) &&
+                     (flight.minimizing ? flight.progress->value() <= .001F : flight.progress->value() >= .999F)) ||
+                    Time::steadyNow() - flight.started > std::chrono::seconds(2))
+                    finished.emplace_back(key, flight.minimizing);
             }
         }
         for (const auto& [key, hide] : finished)
@@ -478,16 +549,16 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
         // rather than flashing back to its original geometry before the snapshot.
         auto flight = flights.extract(reinterpret_cast<uintptr_t>(w.get()));
         if (!flight.empty()) {
+            bubbleEvent(reinterpret_cast<uintptr_t>(w.get()), flight.mapped(), true);
             flight.mapped().progress->resetAllCallbacks();
             flight.mapped().progress->warp();
-            flight.mapped().fadeProgress->resetAllCallbacks();
-            flight.mapped().fadeProgress->warp();
         }
         listeners.erase(reinterpret_cast<uintptr_t>(w.get()));
     });
     for (const auto& w : Desktop::windowState()->windows())
         observe(w);
-    return {"caelestia-minimize", "Native minimize and restore flights for the Caelestia hub", "luancaldeira", "1.6"};
+    g_pEventManager->postEvent(SHyprIPCEvent{.event="caelestia_bubble_ready",.data="1"});
+    return {"caelestia-minimize", "Native minimize and restore flights for the Caelestia hub", "luancaldeira", "1.7"};
 }
 
 APICALL EXPORT void PLUGIN_EXIT() {
@@ -497,10 +568,13 @@ APICALL EXPORT void PLUGIN_EXIT() {
         flightTimer.reset();
     }
     while (!flights.empty())
-        finishFlight(flights.begin()->first, true);
+        finishFlight(flights.begin()->first, flights.begin()->second.minimizing);
+    if (roundingHook) { roundingHook->unhook(); roundingHook = nullptr; }
+    if (roundingPowerHook) { roundingPowerHook->unhook(); roundingPowerHook = nullptr; }
     openedLate.reset();
     activated.reset();
     launchOrigins.clear();
+    barOrigins.clear();
     if (closeMotionHook) { closeMotionHook->unhook(); closeMotionHook = nullptr; }
     opened.reset();
     closed.reset();

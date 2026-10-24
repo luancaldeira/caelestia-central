@@ -1,6 +1,6 @@
 {
   "date": "2026-10-24",
-  "nativePluginVersion": "1.6",
+  "nativePluginVersion": "1.7",
   "environment": {
     "hyprland": "0.56.2",
     "caelestiaShell": "2.3.0",
@@ -128,7 +128,9 @@
       "aspectRatioPreserved": true,
       "fadeDuringMotion": true
     },
-    "screenRecordingUsed": false
+    "screenRecordingUsed": false,
+    "historical": true,
+    "supersededBy": "bubbleMotion"
   },
   "emptyWindowTransition": {
     "passed": true,
@@ -229,5 +231,111 @@
     "fullSizeLoginImageAndExifTests": true,
     "screenRecordingUsed": false,
     "nativeFolderPickerOpened": true
+  },
+  "bubbleMotion": {
+    "passed": true,
+    "spring": "windowsMove",
+    "portSize": [
+      48,
+      48
+    ],
+    "body": "Native full-resolution window, temporary rounding and restrained stretch",
+    "membrane": "Existing Caelestia BlobGroup with stable model rows and 180 ms relaxation",
+    "largeWindowsRemainOpaque": true,
+    "perMonitorBarOrigin": true,
+    "offWorkspaceMembranesSuppressed": true,
+    "idlePolling": false,
+    "portableGeometryChecks": "Endpoints, monitor offsets, positive bounds, radius limits, late opacity",
+    "backends": [
+      {
+        "backend": "wayland",
+        "passed": true,
+        "connectedMembrane": true
+      },
+      {
+        "backend": "x11",
+        "passed": true,
+        "connectedMembrane": true
+      }
+    ],
+    "nativeCases": [
+      "tiled",
+      "floating",
+      "reduced motion",
+      "X11"
+    ],
+    "interruptions": [
+      {
+        "case": "cancel",
+        "passed": true
+      },
+      {
+        "case": "restore",
+        "passed": true
+      },
+      {
+        "case": "close",
+        "passed": true
+      },
+      {
+        "case": "reload",
+        "passed": true
+      }
+    ],
+    "closeIsolation": {
+      "passed": true,
+      "cases": [
+        {
+          "backend": "x11",
+          "action": "close Beta",
+          "veto": true,
+          "remaining": 3,
+          "othersStayedMinimized": true,
+          "hubStayedOpen": true
+        },
+        {
+          "backend": "x11",
+          "action": "close Alpha",
+          "veto": false,
+          "remaining": 2,
+          "othersStayedMinimized": true,
+          "hubStayedOpen": true
+        },
+        {
+          "backend": "x11",
+          "action": "close Gamma",
+          "veto": false,
+          "remaining": 1,
+          "othersStayedMinimized": true,
+          "hubStayedOpen": true
+        },
+        {
+          "backend": "wayland",
+          "action": "close Beta",
+          "veto": true,
+          "remaining": 3,
+          "othersStayedMinimized": true,
+          "hubStayedOpen": true
+        },
+        {
+          "backend": "wayland",
+          "action": "close Alpha",
+          "veto": false,
+          "remaining": 2,
+          "othersStayedMinimized": true,
+          "hubStayedOpen": true
+        },
+        {
+          "backend": "wayland",
+          "action": "close Gamma",
+          "veto": false,
+          "remaining": 1,
+          "othersStayedMinimized": true,
+          "hubStayedOpen": true
+        }
+      ]
+    },
+    "existingUserWindowsPreserved": true,
+    "screenRecordingUsed": false
   }
 }

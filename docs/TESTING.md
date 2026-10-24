@@ -32,9 +32,9 @@ The original regression was reproduced before the fix: after all three windows w
 
 Check these behaviors visually when changing native motion or the central:
 
-- Favorite icon launch starts at the clicked 32 px icon; existing apps are reused.
-- Minimize mirrors the upward close motion toward the bottom edge, with the same scale, `windowsOut` geometry timing and `fadeOut` opacity timing, without a lingering frame or flash at full size.
-- Restore grows from the preview and leaves the hub and pointer available for another restore.
+- Favorite launch uses the bottom bar beneath the clicked icon; other main application windows use the registered monitor port. Existing apps are reused.
+- Opening and minimization share a reversible `windowsMove` bubble path with temporary rounding, a connected Caelestia membrane, and late opacity only at the port. Close retains its upward departure.
+- Restore releases the window from the bottom bar and leaves the hub and pointer available for another restore.
 - Closing a visible app shrinks upward; application close confirmation remains functional.
 - The finite window list opens at its middle entry, exposes adjacent previews at the edges, stops at both ends, and reverses smoothly while keeping stable window identities.
 - The bottom handle moves between icons and options with native dashboard easing, a small overshoot, and interruption from the current position.
@@ -42,6 +42,15 @@ Check these behaviors visually when changing native motion or the central:
 - The splash reveals the new live wallpaper and shell palette, cancels on workspace/lock changes, cleans up captures, and still runs after unlock.
 
 The lock/unlock cycle was previously confirmed by the desktop owner. An automated test does not attempt to enter a user's password. The latest close regression was run in the real session on both X11 and Wayland; machine-specific results are summarized in `docs/verification.json`.
+
+## Bubble geometry
+
+```sh
+c++ -std=c++23 -O2 -Wall -Wextra tests/test_bubble_motion.cpp -o /tmp/bubble-motion-test
+/tmp/bubble-motion-test
+```
+
+Portable checks cover endpoints, monitor offsets, positive bounds, rounding limits and late opacity. Live tests check X11/Wayland opening and absorption, preserved native goals, restoration, reduced motion, reversal during minimization, close and plugin reload. No screen recording is needed.
 
 ## Visual demonstrations
 

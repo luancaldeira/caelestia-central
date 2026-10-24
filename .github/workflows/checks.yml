@@ -18,6 +18,10 @@ jobs:
           printf '%s\n' 'https://security.ubuntu.com/ubuntu' | sudo tee /etc/apt/apt-mirrors-security.txt >/dev/null
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends ffmpeg liblz4-1
+      - name: Bubble geometry checks
+        run: |
+          c++ -std=c++23 -O2 -Wall -Wextra tests/test_bubble_motion.cpp -o /tmp/bubble-motion-test
+          /tmp/bubble-motion-test
       - name: Compile Python sources
         run: python -m compileall -q scripts tests wallpaperengine
       - name: Installation snapshot tests
