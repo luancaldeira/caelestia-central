@@ -80,7 +80,7 @@ Item {
         const bottom = mapToItem(null,width / 2,height);
         const base = screen.y + bottom.y - (implicitHeight + 5) * offsetScale;
         const center = Number.isFinite(centerX) ? centerX : screen.x + bottom.x;
-        return {x:Math.max(screen.x,Math.min(screen.x+screen.width-48,center-24)),y:base-48,width:48,height:48};
+        return {x:Math.max(screen.x,Math.min(screen.x+screen.width-48,center-24)),y:base+4,width:48,height:48};
     }
     function minimizeTarget() { return bubbleOrigin(); }
     function info() {

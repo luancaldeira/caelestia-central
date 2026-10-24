@@ -186,17 +186,19 @@ StyledWindow {
             delegate: Item {
                 id: membrane
                 required property var model
-                readonly property real p: Math.max(0,Math.min(1,(model.openness-.12)/.42))
+                readonly property real p: Math.max(0,Math.min(1,(model.openness-.62)/.24))
                 property real release: model.settling ? 0 : 1
-                readonly property real attached: (1 - p*p*(3-2*p)) * release
-                readonly property real center: model.portX + model.portWidth/2 - root.screen.x
-                readonly property real base: model.portY + model.portHeight - root.screen.y
-                readonly property real gap: Math.max(0,Math.min(96,model.portY + model.portHeight - model.windowY - model.windowHeight))
+                readonly property real bloomProgress: Math.max(0,Math.min(1,model.openness/.08))
+                readonly property real bloom: .15 + .85*bloomProgress*bloomProgress*(3-2*bloomProgress)
+                readonly property real attached: (1 - p*p*(3-2*p)) * release * bloom
+                readonly property real center: model.windowX + model.windowWidth/2 - root.screen.x
+                readonly property real base: model.portY - 4 - root.screen.y
+                readonly property real gap: Math.max(0,Math.min(root.screen.height*.6,model.portY - 4 - model.windowY - model.windowHeight))
                 Behavior on release { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
                 Loader {
                     active: membrane.attached > .001 && membrane.model.portX + membrane.model.portWidth/2 >= root.screen.x &&
                         membrane.model.portX + membrane.model.portWidth/2 < root.screen.x + root.screen.width &&
-                        membrane.model.portY + membrane.model.portHeight > root.screen.y && membrane.model.portY < root.screen.y + root.screen.height
+                        membrane.model.portY + membrane.model.portHeight > root.screen.y && membrane.model.portY - 4 <= root.screen.y + root.screen.height
                     sourceComponent: Item {
                         BlobRect {
                             group: blobGroup
@@ -211,7 +213,7 @@ StyledWindow {
                             x: membrane.center - width/2
                             y: membrane.base - height + 4
                             implicitWidth: (32+28*membrane.attached) * membrane.attached
-                            implicitHeight: (membrane.gap+32) * membrane.attached
+                            implicitHeight: (membrane.gap+32) * membrane.release * membrane.bloom
                             radius: width/2
                         }
                     }
@@ -369,7 +371,7 @@ StyledWindow {
         interval: 100
         onTriggered: WindowBubble.registerBar(root.screen.name, {
             x:root.screen.x + (root.screen.width + bar.implicitWidth - root.borderThickness)/2 - 24,
-            y:root.screen.y + root.screen.height - root.borderThickness - 48,width:48,height:48})
+            y:root.screen.y + root.screen.height - root.borderThickness + 4,width:48,height:48})
     }
     Connections {
         target: root

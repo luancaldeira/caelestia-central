@@ -33,7 +33,7 @@ The original regression was reproduced before the fix: after all three windows w
 Check these behaviors visually when changing native motion or the central:
 
 - Favorite launch uses the bottom bar beneath the clicked icon; other main application windows use the registered monitor port. Existing apps are reused.
-- Opening and minimization share a reversible `windowsMove` bubble path with temporary rounding, a connected Caelestia membrane, and late opacity only at the port. Close retains its upward departure.
+- Opening and minimization share a reversible `windowsMove` bubble path with temporary rounding, a connected Caelestia membrane, and a fully opaque body emerging from behind the bar. Close retains its upward departure.
 - Restore releases the window from the bottom bar and leaves the hub and pointer available for another restore.
 - Closing a visible app shrinks upward; application close confirmation remains functional.
 - The finite window list opens at its middle entry, exposes adjacent previews at the edges, stops at both ends, and reverses smoothly while keeping stable window identities.
@@ -50,7 +50,7 @@ c++ -std=c++23 -O2 -Wall -Wextra tests/test_bubble_motion.cpp -o /tmp/bubble-mot
 /tmp/bubble-motion-test
 ```
 
-Portable checks cover endpoints, monitor offsets, positive bounds, rounding limits and late opacity. Live tests check X11/Wayland opening and absorption, preserved native goals, restoration, reduced motion, reversal during minimization, close and plugin reload. No screen recording is needed.
+Portable checks cover endpoints, monitor offsets, positive bounds, rounding limits, full opacity, a closed endpoint behind the bar, and continuous surface intersection before detachment. Live tests check X11/Wayland opening and absorption, preserved native goals, restoration, reduced motion, reversal during minimization, close and plugin reload. No screen recording is needed.
 
 ## Visual demonstrations
 

@@ -94,7 +94,7 @@ static float bubbleRoundingPower(Desktop::View::CWindow* window) {
     const auto original = reinterpret_cast<Original>(roundingPowerHook->m_original)(window);
     const auto it = flights.find(reinterpret_cast<uintptr_t>(window));
     if (it == flights.end()) return original;
-    return 2.F + (original - 2.F) * BubbleMotion::smooth(.08, .72, it->second.progress->value());
+    return 2.F + (original - 2.F) * BubbleMotion::smooth(.34, .88, it->second.progress->value());
 }
 
 static std::string normalizedClass(std::string text) {
@@ -195,7 +195,7 @@ static void animateLaunch(PHLWINDOW window, bool existing) {
         const auto monitor = window->m_monitor.lock();
         if (existing || !monitor || window->parent() || window->m_X11DoesntWantBorders) return;
         const auto port = barOrigins.find(monitor->m_name);
-        const auto position = port == barOrigins.end() ? Vector2D(monitor->m_position.x + monitor->m_size.x/2.-24., monitor->m_position.y + monitor->m_size.y-58.) : port->second.first;
+        const auto position = port == barOrigins.end() ? Vector2D(monitor->m_position.x + monitor->m_size.x/2.-24., monitor->m_position.y + monitor->m_size.y-6.) : port->second.first;
         const auto size = port == barOrigins.end() ? Vector2D(48.,48.) : port->second.second;
         startBubble(window, position, size, true);
         return;
@@ -346,12 +346,12 @@ static bool startBubble(PHLWINDOW window, Vector2D portPosition, Vector2D portSi
     const auto presentedSize = size->value();
     const auto presentedAlpha = window->alpha(Desktop::View::WINDOW_ALPHA_FADE)->value();
     finishFlight(key, false);
-    // Older shell versions pass a whole preview. Anchor those at the bottom
-    // bar as well; modern callers supply its exact screen-scaled port.
-    if (portSize.x > 80. || portSize.y > 80.) {
-        portPosition = {portPosition.x + portSize.x / 2. - 24., monitor->m_position.y + monitor->m_size.y - 58.};
-        portSize = {48., 48.};
-    }
+    // The initial body belongs behind the bar, including for callers that
+    // still supply an icon or preview rectangle from an older shell version.
+    const auto registered = barOrigins.find(monitor->m_name);
+    const auto center = std::clamp(portPosition.x + portSize.x / 2., monitor->m_position.x + 24., monitor->m_position.x + monitor->m_size.x - 24.);
+    portPosition = {center - 24., registered == barOrigins.end() ? monitor->m_position.y + monitor->m_size.y - 6. : registered->second.first.y};
+    portSize = {48.,48.};
     auto& f = flights[key];
     f.window = window;
     f.minimizing = !entering;
@@ -558,7 +558,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     for (const auto& w : Desktop::windowState()->windows())
         observe(w);
     g_pEventManager->postEvent(SHyprIPCEvent{.event="caelestia_bubble_ready",.data="1"});
-    return {"caelestia-minimize", "Native minimize and restore flights for the Caelestia hub", "luancaldeira", "1.7"};
+    return {"caelestia-minimize", "Native minimize and restore flights for the Caelestia hub", "luancaldeira", "1.8"};
 }
 
 APICALL EXPORT void PLUGIN_EXIT() {

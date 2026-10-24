@@ -1,6 +1,6 @@
 {
   "date": "2026-10-24",
-  "nativePluginVersion": "1.7",
+  "nativePluginVersion": "1.8",
   "environment": {
     "hyprland": "0.56.2",
     "caelestiaShell": "2.3.0",
@@ -245,7 +245,7 @@
     "perMonitorBarOrigin": true,
     "offWorkspaceMembranesSuppressed": true,
     "idlePolling": false,
-    "portableGeometryChecks": "Endpoints, monitor offsets, positive bounds, radius limits, late opacity",
+    "portableGeometryChecks": "Endpoints behind the bar, physical intersection through expansion, delayed horizontal travel, monitor offsets, positive bounds, radius limits, full opacity",
     "backends": [
       {
         "backend": "wayland",
@@ -336,6 +336,21 @@
       ]
     },
     "existingUserWindowsPreserved": true,
-    "screenRecordingUsed": false
+    "screenRecordingUsed": false,
+    "allWindowMotionRemainsOpaque": true,
+    "closedEndpointBehindBar": true,
+    "continuousIntersectionThroughExpansion": 0.58,
+    "membraneFollowsActualBottomEdge": true,
+    "singleFrameInspection": true,
+    "rootedEmergenceBackends": [
+      {
+        "backend": "wayland",
+        "passed": true
+      },
+      {
+        "backend": "x11",
+        "passed": true
+      }
+    ]
   }
 }
