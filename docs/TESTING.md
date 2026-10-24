@@ -32,9 +32,9 @@ The original regression was reproduced before the fix: after all three windows w
 
 Check these behaviors visually when changing native motion or the central:
 
-- Favorite icon launch starts at the clicked 32 px icon; existing apps are reused.
-- Minimize mirrors the upward close motion toward the bottom edge, with the same scale, `windowsOut` geometry timing and `fadeOut` opacity timing, without a lingering frame or flash at full size.
-- Restore grows from the preview and leaves the hub and pointer available for another restore.
+- Favorite icon and native launcher activation reveal the client through the actual bottom hover drawer; existing apps are reused.
+- Minimize reverses the same drawer offset, merges into the bottom border, and finishes on the hidden workspace without a full-size flash.
+- Restore reveals the client through the bottom border, detaches the shared surface and hands off to the native window, leaving the hub and pointer available.
 - Closing a visible app shrinks upward; application close confirmation remains functional.
 - The finite window list opens at its middle entry, exposes adjacent previews at the edges, stops at both ends, and reverses smoothly while keeping stable window identities.
 - The bottom handle moves between icons and options with native dashboard easing, a small overshoot, and interruption from the current position.
@@ -42,6 +42,12 @@ Check these behaviors visually when changing native motion or the central:
 - The splash reveals the new live wallpaper and shell palette, cancels on workspace/lock changes, cleans up captures, and still runs after unlock.
 
 The lock/unlock cycle was previously confirmed by the desktop owner. An automated test does not attempt to enter a user's password. The latest close regression was run in the real session on both X11 and Wayland; machine-specific results are summarized in `docs/verification.json`.
+
+## Shared drawer verification
+
+`qs -c caelestia ipc call windowdrawer info` reports active image readiness, source resolution, drawer offset, deformed border clearance and detachment. Verify these alongside the actual displayed animation; native alpha alone cannot establish that a window image is visible. Opening and restoring must show client pixels inside the moving surface, and minimization must follow the same surface back into the border. At rest there must be no active panel or outstanding hidden native client.
+
+Use real applications in addition to GTK fixtures, and test both Wayland and X11. Check the ordinary native launcher as well as favorite icons. The preview is a single still image during the brief motion, so busy application content becomes live again when the native surface is revealed. No screen recording is required.
 
 ## Visual demonstrations
 

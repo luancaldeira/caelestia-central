@@ -3,6 +3,7 @@
 #include <hyprland/src/output/Monitor.hpp>
 #include <hyprland/src/config/shared/animation/AnimationTree.hpp>
 #include <hyprland/src/desktop/view/Window.hpp>
+#include <hyprland/src/desktop/Workspace.hpp>
 #include <hyprland/src/desktop/state/WindowState.hpp>
 #include <hyprland/src/protocols/XDGShell.hpp>
 #include <hyprland/src/xwayland/XSurface.hpp>
@@ -53,6 +54,136 @@ struct LaunchOrigin {
 static std::vector<LaunchOrigin> launchOrigins;
 static std::string lastLaunchAddress;
 static Vector2D lastLaunchPosition, lastLaunchSize;
+
+// The shell's real drawer component owns motion. This lease only suppresses
+// the stationary native client while its single GPU image moves in that drawer.
+struct DrawerLease {
+    PHLWINDOWREF window;
+    Vector2D goalPosition, goalSize;
+    float fadeGoal = 1.F;
+    std::string workspace;
+    Time::steady_tp started;
+    uint64_t token = 0;
+    bool minimizing = false;
+    bool claimed = false;
+    bool released = false;
+};
+static std::unordered_map<uintptr_t, DrawerLease> drawerLeases;
+static uint64_t nextDrawerToken = 0;
+static bool drawerAvailable = false;
+static uint64_t drawerOwner = 0;
+static PHLWINDOW luaWindow(lua_State* L);
+
+static void drawerEvent(uintptr_t key, const DrawerLease& lease, bool done = false) {
+    const auto w=lease.window.lock();
+    const auto monitor=w ? w->m_monitor.lock() : nullptr;
+    g_pEventManager->postEvent(SHyprIPCEvent{.event="caelestia_drawer",.data=std::format(
+        R"({{"address":"{:x}","pid":{},"token":{},"monitor":{},"x":{:.3f},"y":{:.3f},"width":{:.3f},"height":{:.3f},"minimizing":{},"done":{}}})",
+        key,w ? w->getPID() : 0,lease.token,monitor ? static_cast<int>(monitor->m_id) : -1,
+        lease.goalPosition.x,lease.goalPosition.y,lease.goalSize.x,lease.goalSize.y,
+        lease.minimizing ? "true" : "false",done ? "true" : "false")});
+}
+
+static void finishDrawer(uintptr_t key,bool complete) {
+    auto node=drawerLeases.extract(key);
+    if(node.empty()) return;
+    auto& lease=node.mapped();
+    const auto w=lease.window.lock();
+    if(w && w->m_isMapped) {
+        auto& fade=w->alpha(Desktop::View::WINDOW_ALPHA_FADE);
+        bool hidden=false;
+        if(complete && lease.minimizing && w->m_workspace && w->m_workspace->m_name==lease.workspace) {
+            fade->setValueAndWarp(0.F);
+            const auto selector=std::format("address:0x{:x}",key);
+            const auto unpin=w->m_pinned ? std::format("hl.dispatch(hl.dsp.window.pin({{window=\"{}\",action=\"off\"}}));",selector) : "";
+            HyprlandAPI::invokeHyprctlCommand("dispatch",std::format(
+                "function() {} hl.dispatch(hl.dsp.window.move({{window=\"{}\",workspace=\"special:caelestia-minimized\",follow=false}})) end",unpin,selector));
+            hidden=w->m_workspace && w->m_workspace->m_name=="special:caelestia-minimized";
+            if(hidden) w->alpha(Desktop::View::WINDOW_ALPHA_MOVE_TO_WORKSPACE)->warp();
+        }
+        fade->setValueAndWarp(lease.fadeGoal);
+        g_pEventManager->postEvent(SHyprIPCEvent{.event="caelestia_minimize_done",.data=std::format("{:x},{},{}",key,w->getPID(),hidden ? 1 : 0)});
+    }
+    drawerEvent(key,lease,true);
+}
+
+static bool startDrawer(PHLWINDOW w,bool minimizing) {
+    if(!drawerAvailable || !w || !w->m_workspace || !w->m_workspace->isVisibleNotCovered() ||
+       w->m_ruleApplicator->noAnim().valueOrDefault() || !w->positionAnimation()->enabled() || !w->sizeAnimation()->enabled()) return false;
+    const auto key=reinterpret_cast<uintptr_t>(w.get());
+    auto existing=drawerLeases.find(key);
+    if(existing!=drawerLeases.end()) {
+        auto& lease=existing->second;
+        lease.minimizing=minimizing;
+        lease.released=false;
+        w->alpha(Desktop::View::WINDOW_ALPHA_FADE)->setValueAndWarp(0.F);
+        lease.started=Time::steadyNow();
+        drawerEvent(key,lease);
+        if(!minimizing) g_pEventManager->postEvent(SHyprIPCEvent{.event="caelestia_minimize_done",.data=std::format("{:x},{},0",key,w->getPID())});
+        return true;
+    }
+    if(drawerLeases.size()>=4) return false;
+    DrawerLease lease;
+    lease.window=w;
+    lease.goalPosition=w->positionAnimation()->goal();
+    lease.goalSize=w->sizeAnimation()->goal();
+    lease.fadeGoal=w->alpha(Desktop::View::WINDOW_ALPHA_FADE)->goal();
+    lease.workspace=w->m_workspace->m_name;
+    lease.started=Time::steadyNow();
+    lease.token=++nextDrawerToken;
+    lease.minimizing=minimizing;
+    w->positionAnimation()->warp();
+    w->sizeAnimation()->warp();
+    // Window export renders a standalone client at alpha=1, independently of
+    // its desktop alpha. Quickshell takes one frame; no video stream is used.
+    w->alpha(Desktop::View::WINDOW_ALPHA_FADE)->setValueAndWarp(0.F);
+    drawerLeases.emplace(key,lease);
+    drawerEvent(key,lease);
+    flightTimer->updateTimeout(std::chrono::milliseconds(8));
+    return true;
+}
+
+static int enableDrawer(lua_State* L) {
+    const auto owner=lua_isinteger(L,2) ? static_cast<uint64_t>(lua_tointeger(L,2)) : 0;
+    // A retiring QML generation must not disable its replacement after reload.
+    if(owner<drawerOwner) { lua_pushboolean(L,false); return 1; }
+    drawerOwner=owner;
+    drawerAvailable=lua_toboolean(L,1);
+    if(!drawerAvailable) while(!drawerLeases.empty()) finishDrawer(drawerLeases.begin()->first,true);
+    lua_pushboolean(L,true);
+    return 1;
+}
+
+static int claimDrawer(lua_State* L) {
+    const auto w=luaWindow(L);
+    const auto it=w ? drawerLeases.find(reinterpret_cast<uintptr_t>(w.get())) : drawerLeases.end();
+    const auto valid=it!=drawerLeases.end() && lua_isinteger(L,3) && it->second.token==static_cast<uint64_t>(lua_tointeger(L,3));
+    if(valid) it->second.claimed=true;
+    lua_pushboolean(L,valid);
+    return 1;
+}
+
+static int releaseDrawer(lua_State* L) {
+    const auto w=luaWindow(L);
+    const auto it=w ? drawerLeases.find(reinterpret_cast<uintptr_t>(w.get())) : drawerLeases.end();
+    const auto valid=it!=drawerLeases.end() && !it->second.minimizing && lua_isinteger(L,3) && it->second.token==static_cast<uint64_t>(lua_tointeger(L,3));
+    if(valid) {
+        it->second.released=true;
+        w->alpha(Desktop::View::WINDOW_ALPHA_FADE)->setValueAndWarp(it->second.fadeGoal);
+    }
+    lua_pushboolean(L,valid);
+    return 1;
+}
+
+static int completeDrawer(lua_State* L) {
+    const auto w=luaWindow(L);
+    const auto it=w ? drawerLeases.find(reinterpret_cast<uintptr_t>(w.get())) : drawerLeases.end();
+    const auto valid=it!=drawerLeases.end() && lua_isinteger(L,3) && it->second.token==static_cast<uint64_t>(lua_tointeger(L,3));
+    if(valid) finishDrawer(it->first,true);
+    lua_pushboolean(L,valid);
+    return 1;
+}
+
 
 static std::string normalizedClass(std::string text) {
     std::ranges::transform(text, text.begin(), [](unsigned char c) { return std::tolower(c); });
@@ -138,6 +269,12 @@ static void animateLaunch(PHLWINDOW window, bool existing) {
     auto& position = window->positionAnimation();
     auto& size = window->sizeAnimation();
     if (!position || !size || !position->enabled() || !size->enabled() || window->m_ruleApplicator->noAnim().valueOrDefault()) return;
+    if(startDrawer(window,false)) {
+        lastLaunchAddress=std::format("{:x}",pointer);
+        lastLaunchPosition=origin.position;
+        lastLaunchSize=origin.size;
+        return;
+    }
     position->setConfig(Config::animationTree()->getAnimationPropertyConfig("windowsMove"));
     size->setConfig(Config::animationTree()->getAnimationPropertyConfig("windowsMove"));
     position->setValue(origin.position);
@@ -253,6 +390,7 @@ static int restoreFrom(lua_State* L) {
     std::erase_if(launchOrigins, [&](const auto& origin) {
         return origin.classes.contains(normalizedClass(window->m_class)) || origin.classes.contains(normalizedClass(window->m_initialClass));
     });
+    if(startDrawer(window,false)) { lua_pushboolean(L,true); return 1; }
     const bool interrupted = flights.contains(reinterpret_cast<uintptr_t>(window.get()));
     const auto presentedPosition = position->value();
     const auto presentedSize = size->value();
@@ -293,6 +431,7 @@ static int minimizeTo(lua_State* L) {
         lua_pushboolean(L, false);
         return 1;
     }
+    if(startDrawer(window,true)) { lua_pushboolean(L,true); return 1; }
     const auto key = reinterpret_cast<uintptr_t>(window.get());
     if (flights.contains(key)) {
         lua_pushboolean(L, true);
@@ -357,6 +496,11 @@ static int minimizeTo(lua_State* L) {
 
 static int cancelMinimize(lua_State* L) {
     const auto window = luaWindow(L);
+    if(window && drawerLeases.contains(reinterpret_cast<uintptr_t>(window.get()))) {
+        finishDrawer(reinterpret_cast<uintptr_t>(window.get()),false);
+        lua_pushboolean(L,true);
+        return 1;
+    }
     if (!window || !flights.contains(reinterpret_cast<uintptr_t>(window.get()))) {
         lua_pushboolean(L, false);
         return 1;
@@ -386,8 +530,11 @@ static int animationState(lua_State* L) {
     const auto field = [L](const char* name, double value) { lua_pushnumber(L, value); lua_setfield(L, -2, name); };
     field("x", position.x); field("y", position.y); field("width", size.x); field("height", size.y);
     field("targetX", targetPosition.x); field("targetY", targetPosition.y); field("targetWidth", targetSize.x); field("targetHeight", targetSize.y);
-    lua_pushboolean(L, window->positionAnimation()->isBeingAnimated() || window->sizeAnimation()->isBeingAnimated() || flights.contains(reinterpret_cast<uintptr_t>(window.get())));
+    lua_pushboolean(L, window->positionAnimation()->isBeingAnimated() || window->sizeAnimation()->isBeingAnimated() || flights.contains(reinterpret_cast<uintptr_t>(window.get())) || drawerLeases.contains(reinterpret_cast<uintptr_t>(window.get())));
     lua_setfield(L, -2, "animating");
+    lua_pushboolean(L,drawerLeases.contains(reinterpret_cast<uintptr_t>(window.get())));
+    lua_setfield(L,-2,"drawerLeased");
+    field("rounding",window->rounding());
     field("fadeAlpha", window->alpha(Desktop::View::WINDOW_ALPHA_FADE)->value());
     field("workspaceFadeAlpha", window->alpha(Desktop::View::WINDOW_ALPHA_MOVE_TO_WORKSPACE)->value());
     field("movingFromMonitor", window->m_monitorMovedFrom);
@@ -443,7 +590,11 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
         !HyprlandAPI::addLuaFunction(handle, "caelestia_minimize", "minimize_to", minimizeTo) ||
         !HyprlandAPI::addLuaFunction(handle, "caelestia_minimize", "cancel_minimize", cancelMinimize) ||
         !HyprlandAPI::addLuaFunction(handle, "caelestia_minimize", "prepare_launch", prepareLaunch) ||
-        !HyprlandAPI::addLuaFunction(handle, "caelestia_minimize", "launch_state", launchState))
+        !HyprlandAPI::addLuaFunction(handle, "caelestia_minimize", "launch_state", launchState) ||
+        !HyprlandAPI::addLuaFunction(handle, "caelestia_minimize", "enable_drawer", enableDrawer) ||
+        !HyprlandAPI::addLuaFunction(handle, "caelestia_minimize", "claim_drawer", claimDrawer) ||
+        !HyprlandAPI::addLuaFunction(handle, "caelestia_minimize", "release_drawer", releaseDrawer) ||
+        !HyprlandAPI::addLuaFunction(handle, "caelestia_minimize", "complete_drawer", completeDrawer))
         throw std::runtime_error("caelestia-minimize: could not register restoration API");
     const auto functions = HyprlandAPI::findFunctionsByName(handle, "_ZNK7Desktop4View26CWindowAnimationController10animateOutEv");
     if (functions.size() != 1)
@@ -468,7 +619,28 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
         }
         for (const auto& [key, hide] : finished)
             finishFlight(key, hide);
-        if (!flights.empty())
+        std::vector<std::pair<uintptr_t,bool>> drawerDone;
+        for(auto& [key,lease]:drawerLeases) {
+            const auto w=lease.window.lock();
+            if(!w || !w->m_isMapped || !w->m_workspace || w->m_workspace->m_name!=lease.workspace)
+                drawerDone.emplace_back(key,false);
+            else if(!w->m_workspace->isVisibleNotCovered() ||
+                    (!lease.claimed && Time::steadyNow()-lease.started>std::chrono::milliseconds(600)) ||
+                    Time::steadyNow()-lease.started>std::chrono::seconds(2))
+                drawerDone.emplace_back(key,true);
+            else {
+                const auto pos=w->positionAnimation()->goal();
+                const auto size=w->sizeAnimation()->goal();
+                if(pos!=lease.goalPosition || size!=lease.goalSize) {
+                    lease.goalPosition=pos; lease.goalSize=size;
+                    w->positionAnimation()->warp(); w->sizeAnimation()->warp();
+                    drawerEvent(key,lease);
+                }
+                if(!lease.released) w->alpha(Desktop::View::WINDOW_ALPHA_FADE)->value()=0.F;
+            }
+        }
+        for(const auto& [key,complete]:drawerDone) finishDrawer(key,complete);
+        if (!flights.empty() || !drawerLeases.empty())
             timer->updateTimeout(std::chrono::milliseconds(8));
     }, nullptr);
     g_pEventLoopManager->addTimer(flightTimer);
@@ -483,14 +655,19 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
             flight.mapped().fadeProgress->resetAllCallbacks();
             flight.mapped().fadeProgress->warp();
         }
+        const auto drawer=drawerLeases.extract(reinterpret_cast<uintptr_t>(w.get()));
+        if(!drawer.empty()) drawerEvent(reinterpret_cast<uintptr_t>(w.get()),drawer.mapped(),true);
         listeners.erase(reinterpret_cast<uintptr_t>(w.get()));
     });
     for (const auto& w : Desktop::windowState()->windows())
         observe(w);
-    return {"caelestia-minimize", "Native minimize and restore flights for the Caelestia hub", "luancaldeira", "1.6"};
+    g_pEventManager->postEvent(SHyprIPCEvent{.event="caelestia_drawer_ready",.data="1"});
+    return {"caelestia-minimize", "Native window handoff for Caelestia drawers", "luancaldeira", "2.0"};
 }
 
 APICALL EXPORT void PLUGIN_EXIT() {
+    drawerAvailable=false;
+    while(!drawerLeases.empty()) finishDrawer(drawerLeases.begin()->first,true);
     if (flightTimer) {
         flightTimer->cancel();
         g_pEventLoopManager->removeTimer(flightTimer);

@@ -13,6 +13,7 @@ import qs.components.containers
 import qs.services
 import qs.modules.bar
 import qs.modules.minimized as MinimizedPanel
+import qs.modules.windowmotion as WindowMotion
 
 StyledWindow {
     id: root
@@ -71,7 +72,7 @@ StyledWindow {
 
     name: "drawers"
     WlrLayershell.exclusionMode: ExclusionMode.Ignore
-    WlrLayershell.layer: (windowHubActive && hasFullscreen) || (fsTransitionProg > 0 && contentItem.Config.general.showOverFullscreen) || (hasSpecialWorkspace && hasFullscreenOnNormalWs) ? WlrLayer.Overlay : WlrLayer.Top
+    WlrLayershell.layer: ((windowHubActive || WindowDrawer.motions.count>0) && hasFullscreen) || (fsTransitionProg > 0 && contentItem.Config.general.showOverFullscreen) || (hasSpecialWorkspace && hasFullscreenOnNormalWs) ? WlrLayer.Overlay : WlrLayer.Top
     WlrLayershell.keyboardFocus: screenState.launcher || screenState.session || screenState.minimized ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
     mask: hasFullscreen && !windowHubActive ? emptyRegion : regions
@@ -154,6 +155,7 @@ StyledWindow {
     }
 
     Item {
+        id: surfaceLayer
         anchors.fill: parent
         opacity: root.surfaceColour.a
         layer.enabled: true
@@ -257,6 +259,44 @@ StyledWindow {
 
             Behavior on extraWidth {
                 Anim {}
+            }
+        }
+    }
+
+    Repeater {
+        model: WindowDrawer.motions
+        delegate: Loader {
+            id: windowLoader
+            required property var model
+            active: model.monitor===root.monitor?.id
+            sourceComponent: WindowMotion.WindowPanel {
+                id: drawer
+                model: windowLoader.model
+                screen: root.screen
+                leftInset: bar.implicitWidth
+                borderThickness: root.borderThickness
+                smoothing: root.contentItem.Config.border.smoothing
+                deformation: motionSurface.item?.deformMatrix ?? Qt.matrix4x4()
+
+                // Reuse the actual hover surface, including its group, material,
+                // radius and velocity-driven deformation. Content follows the
+                // same deformation matrix as every existing drawer's content.
+                BlobGroup {
+                    id: releasedGroup
+                    color: root.surfaceColour
+                    smoothing: root.contentItem.Config.border.smoothing
+                }
+                Loader {
+                    id: motionSurface
+                    parent: surfaceLayer
+                    active: drawer.started && !!drawer.model
+                    sourceComponent: PanelBg {
+                        panel: drawer.panel
+                        deformAmount: .1
+                        opacity: drawer.dissolve
+                        group: drawer.detached ? releasedGroup : blobGroup
+                    }
+                }
             }
         }
     }

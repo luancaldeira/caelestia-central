@@ -104,7 +104,7 @@ Singleton {
     }
     function execute(app) {
         try {
-            Launcher.Apps.launch(app);
+            Launcher.Apps.launch(app,true);
             error = "";
             return true;
         } catch (e) {

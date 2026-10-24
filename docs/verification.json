@@ -1,6 +1,6 @@
 {
   "date": "2026-10-24",
-  "nativePluginVersion": "1.6",
+  "nativePluginVersion": "2.0",
   "environment": {
     "hyprland": "0.56.2",
     "caelestiaShell": "2.3.0",
@@ -128,7 +128,8 @@
       "aspectRatioPreserved": true,
       "fadeDuringMotion": true
     },
-    "screenRecordingUsed": false
+    "screenRecordingUsed": false,
+    "scope": "Historical native-motion verification; retained as the fallback when the shared drawer is unavailable."
   },
   "emptyWindowTransition": {
     "passed": true,
@@ -229,5 +230,79 @@
     "fullSizeLoginImageAndExifTests": true,
     "screenRecordingUsed": false,
     "nativeFolderPickerOpened": true
+  },
+  "sharedDrawerMotion": {
+    "surface": "The actual PanelBg, Anim, BlobGroup material and deformation matrix used by the hover drawer.",
+    "clientImage": "One full-resolution GPU still per transition; live content returns at native handoff.",
+    "borderClipping": "Client pixels use the same reserved frame as existing drawers.",
+    "realApplication": "Kitty",
+    "cases": [
+      {
+        "backend": "wayland",
+        "action": "open",
+        "observedFrames": 6,
+        "allStartedFramesHaveClientPixels": true,
+        "surfaceDetachedDuringMotion": true,
+        "nativeAlphaAtEndpoint": 1.0
+      },
+      {
+        "backend": "wayland",
+        "action": "minimize",
+        "observedFrames": 16,
+        "allStartedFramesHaveClientPixels": true,
+        "surfaceDetachedDuringMotion": true,
+        "nativeAlphaAtEndpoint": 0.0
+      },
+      {
+        "backend": "wayland",
+        "action": "restore",
+        "observedFrames": 17,
+        "allStartedFramesHaveClientPixels": true,
+        "surfaceDetachedDuringMotion": true,
+        "nativeAlphaAtEndpoint": 1.0
+      },
+      {
+        "backend": "x11",
+        "action": "open",
+        "observedFrames": 17,
+        "allStartedFramesHaveClientPixels": true,
+        "surfaceDetachedDuringMotion": true,
+        "nativeAlphaAtEndpoint": 1.0
+      },
+      {
+        "backend": "x11",
+        "action": "minimize",
+        "observedFrames": 15,
+        "allStartedFramesHaveClientPixels": true,
+        "surfaceDetachedDuringMotion": true,
+        "nativeAlphaAtEndpoint": 0.0
+      },
+      {
+        "backend": "x11",
+        "action": "restore",
+        "observedFrames": 17,
+        "allStartedFramesHaveClientPixels": true,
+        "surfaceDetachedDuringMotion": true,
+        "nativeAlphaAtEndpoint": 1.0
+      }
+    ],
+    "softReload": {
+      "configurationLoaded": true,
+      "staleGenerationCannotDisableReplacement": true,
+      "subsequentTransitionsCompleted": true,
+      "activePanelsAtRest": 0
+    },
+    "closeIsolation": {
+      "passed": true,
+      "cases": 6,
+      "backends": [
+        "x11",
+        "wayland"
+      ],
+      "includesRejectedClose": true
+    },
+    "desktopOwnerFeedback": "The shared border motion is on the right track.",
+    "verificationScope": "Instrumented application tests preceded the final border-clipping adjustment. The desktop owner tested the installed adjustment afterward and confirmed the direction. Native launcher routing is implemented; its separate GUI path has not been independently verified.",
+    "screenRecordingUsed": false
   }
 }

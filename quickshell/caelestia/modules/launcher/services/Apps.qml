@@ -4,11 +4,16 @@ import Quickshell
 import Caelestia
 import Caelestia.Config
 import qs.utils
+import qs.services
 
 Searcher {
     id: root
 
-    function launch(entry: DesktopEntry): void {
+    function launch(entry, prepared = false) {
+        if (!prepared && !ShellState.sessionLocked && Hypr.usingLua) {
+            const origin = ShellState.componentsForActive()?.panels?.minimized?.minimizeTarget();
+            if (origin && ApplicationLibrary.launch(entry.id,origin)) return;
+        }
         appDb.incrementFrequency(entry.id);
 
         if (entry.runInTerminal)

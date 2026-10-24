@@ -37,7 +37,7 @@ try:
      wait(lambda: any(e['address']==c['address'][2:] for e in json.loads(ipc('list'))));time.sleep(.7)
     assert all(c['workspace']['name']=='special:caelestia-minimized' for c in clients() if c['pid'] in pids)
     if not info()['open']:ipc('toggle')
-    ipc('tab','1');time.sleep(.65)
+    ipc('tab','1');run(str(pointer),'985','900');time.sleep(.65)
     # A rejected close must keep every entry and hidden client intact.
     for name in ('Beta','Alpha','Gamma'):
      target=next(c for c in tests if c['title']=='Central Demo '+name)
