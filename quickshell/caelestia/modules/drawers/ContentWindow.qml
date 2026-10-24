@@ -45,11 +45,6 @@ StyledWindow {
     readonly property real shadowOpacity: 0.7 * (1 - fsTransitionProg)
     readonly property real borderLayoutThickness: hasFullscreen ? 0 : contentItem.Config.border.thickness
 
-    readonly property int bubbleDuration: Tokens.anim.durations.expressiveDefaultSpatial
-    readonly property var bubbleCurve: TokenConfig.appearance.curves.expressiveDefaultSpatial
-    onBubbleDurationChanged: registerBubbleAnchor.restart()
-    onBubbleCurveChanged: registerBubbleAnchor.restart()
-
     property color surfaceColour: Colours.tPalette.m3surface
 
     readonly property int dragMaskPadding: {
@@ -76,7 +71,7 @@ StyledWindow {
 
     name: "drawers"
     WlrLayershell.exclusionMode: ExclusionMode.Ignore
-    WlrLayershell.layer: ((windowHubActive || WindowBubble.motions.count > 0) && hasFullscreen) || (fsTransitionProg > 0 && contentItem.Config.general.showOverFullscreen) || (hasSpecialWorkspace && hasFullscreenOnNormalWs) ? WlrLayer.Overlay : WlrLayer.Top
+    WlrLayershell.layer: (windowHubActive && hasFullscreen) || (fsTransitionProg > 0 && contentItem.Config.general.showOverFullscreen) || (hasSpecialWorkspace && hasFullscreenOnNormalWs) ? WlrLayer.Overlay : WlrLayer.Top
     WlrLayershell.keyboardFocus: screenState.launcher || screenState.session || screenState.minimized ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
     mask: hasFullscreen && !windowHubActive ? emptyRegion : regions
@@ -184,35 +179,6 @@ StyledWindow {
             borderRight: root.borderThickness - anchors.margins - root.sdfBorderOffset
             borderTop: root.borderThickness - anchors.margins - root.sdfBorderOffset
             borderBottom: root.borderThickness - anchors.margins - root.sdfBorderOffset
-        }
-
-        Repeater {
-            model: WindowBubble.motions
-            delegate: Loader {
-                id: surface
-                required property var model
-                active: model.clientAlpha < .999 && model.portX + model.portWidth/2 >= root.screen.x &&
-                    model.portX + model.portWidth/2 < root.screen.x + root.screen.width &&
-                    model.portY + model.portHeight > root.screen.y && model.portY - 4 <= root.screen.y + root.screen.height
-                sourceComponent: BlobRect {
-                    // Attached surfaces participate in the exact SDF used by
-                    // the hover drawers. After release, isolate the shape so
-                    // fading it cannot leave a silhouette in the border group.
-                    BlobGroup {
-                        id: detachedSurface
-                        color: root.surfaceColour
-                        smoothing: root.contentItem.Config.border.smoothing
-                    }
-                    group: surface.model.openness < .72 ? blobGroup : detachedSurface
-                    x: surface.model.windowX - root.screen.x
-                    y: surface.model.windowY - root.screen.y
-                    implicitWidth: surface.model.windowWidth
-                    implicitHeight: surface.model.windowHeight
-                    radius: surface.model.rounding
-                    deformScale: (.1 * Config.appearance.deformScale) / 10000
-                    opacity: 1 - surface.model.clientAlpha
-                }
-            }
         }
 
         PanelBg {
@@ -359,37 +325,6 @@ StyledWindow {
             fullscreen: root.hasFullscreen
         }
     }
-
-    Timer {
-        id: registerBubbleAnchor
-        interval: 100
-        onTriggered: WindowBubble.registerBar(root.screen.name, {
-            x:root.screen.x + (root.screen.width + bar.implicitWidth - root.borderThickness - panels.minimized.compactWidth)/2,
-            y:root.screen.y + root.screen.height - root.borderThickness + 4,
-            width:panels.minimized.compactWidth,height:panels.minimized.compactHeight},
-            root.bubbleDuration,root.bubbleCurve)
-    }
-    Connections {
-        target: root
-        function onBorderThicknessChanged() { registerBubbleAnchor.restart(); }
-    }
-    Connections {
-        target: bar
-        function onImplicitWidthChanged() { registerBubbleAnchor.restart(); }
-    }
-    Connections {
-        target: panels.minimized
-        function onCompactWidthChanged() { registerBubbleAnchor.restart(); }
-        function onCompactHeightChanged() { registerBubbleAnchor.restart(); }
-    }
-    Connections {
-        target: root.screen
-        function onWidthChanged() { registerBubbleAnchor.restart(); }
-        function onHeightChanged() { registerBubbleAnchor.restart(); }
-        function onXChanged() { registerBubbleAnchor.restart(); }
-        function onYChanged() { registerBubbleAnchor.restart(); }
-    }
-    Component.onCompleted: registerBubbleAnchor.start()
 
     MinimizedPanel.ThumbnailCapture { screen: root.screen }
 

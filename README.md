@@ -8,14 +8,13 @@ A compact bottom-edge hub for favorite apps, minimized windows, and local or Ste
 
 - Hover over the bottom center to reveal a small row of favorite application icons.
 - Click the handle beneath the icons to slide into **Apps / Windows / Wallpapers**. The transition uses the same expressive `Anim` curve as Caelestia's dashboard and can reverse while moving.
-- **Apps** opens Caelestia's native launcher. Clicking a favorite releases its window from the bottom drawer, or brings back an existing window without launching a duplicate.
-- **Windows** shows minimized windows in a compact, finite horizontal list. It opens at the middle preview, with neighboring cards peeking in at the edges. Scroll in either direction; the ends do not wrap. Restoring a window releases it from the bottom bar and keeps the hub open for another selection.
-- Launching from favorite icons or restoring from Windows first projects Caelestia's own translucent drawer surface out of the bottom bar. That surface peels away, takes the window's shape, and reveals its live content. Minimizing reverses the path and merges the surface back into the bar. Timing, easing and material deformation come from the same hover drawer. The motion can reverse while moving.
+- **Apps** opens Caelestia's native launcher. Clicking a favorite launches its window from the icon, or brings back an existing window without launching a duplicate.
+- **Windows** shows minimized windows in a compact, finite horizontal list. It opens at the middle preview, with neighboring cards peeking in at the edges. Scroll in either direction; the ends do not wrap. Restoring a window grows it from its preview and keeps the hub open for another selection.
 - Minimize buttons and **Super+M** send windows into the hub. Closing a minimized window closes only that window. Other minimized windows remain hidden, including when an X11 toolkit updates their state after a sibling closes.
 - **Wallpapers** reads image folders you choose, with optional Steam Workshop integration. Open the folder button to add or remove folders without moving your files. It uses a rectangular Cover Flow carousel with perspective and reflections. Right-click to favorite; favorites appear first the next time the library opens.
 - Wallpaper changes reveal the live wallpaper and the new shell colors through a soft circular splash originating at the pointer. Scene captures and video frames improve carousel preview quality.
 - The saved wallpaper starts with the graphical session without opening the hub. Login backgrounds use a separate full-size still; compatible Caelestia greetd installations can opt into a persistent public export.
-- Closing a visible application shrinks it upward, visually distinguishing closing from minimizing back into the bottom bar.
+- Closing a visible application shrinks it upward, visually distinguishing closing from minimizing downward offscreen.
 
 ## Wallpaper sources
 

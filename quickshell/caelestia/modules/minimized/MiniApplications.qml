@@ -67,9 +67,7 @@ Item {
                         if (mouse.button === Qt.RightButton) ApplicationLibrary.favorite(pressedId);
                         else if (Date.now() >= root.launchBlockedUntil) {
                             const rect = appIcon.mapToItem(null,Qt.rect(2,2,32,32));
-                            const panel = ShellState.componentsFor(root.screen)?.panels?.minimized;
-                            const origin = panel?.bubbleOrigin(rect.x + root.screen.x + rect.width / 2) ||
-                                {x:rect.x + root.screen.x,y:rect.y + root.screen.y,width:rect.width,height:rect.height};
+                            const origin = {x:rect.x + root.screen.x,y:rect.y + root.screen.y,width:rect.width,height:rect.height};
                             if (ApplicationLibrary.launch(pressedId,origin)) root.launched();
                         }
                     }

@@ -8,7 +8,7 @@
 
 The wallpaper carousel keeps its final screen-bounded dimensions inside a clipped viewport while the panel opens. Cover dimensions, image crops and orbit spacing remain stable throughout the expansion.
 
-`MiniApplications.qml` displays raw favorite icons. `ApplicationLibrary.qml` reads desktop entries and preserves native DesktopEntry launch semantics, including D-Bus activation, working directories, and arguments. The current drawer's dimensions and the bar's surface anchor arm a short-lived native launch intent. Matching existing windows are reused; minimized matches go through the regular restore service.
+`MiniApplications.qml` displays raw favorite icons. `ApplicationLibrary.qml` reads desktop entries and preserves native DesktopEntry launch semantics, including D-Bus activation, working directories, and arguments. An optional icon origin arms a short-lived native launch intent. Matching existing windows are reused; minimized matches go through the regular restore service.
 
 ## Minimized-window lifecycle
 
@@ -20,11 +20,7 @@ The native plugin listens for client minimize requests in XDG-shell and XWayland
 
 ## Native motion
 
-The extension animates presented window geometry while keeping layout goals and client surface resolution intact. `BubbleMotion.hpp` describes a reversible path from a drawer behind the bottom border to the final window. It first translates a fixed-size panel vertically, matching the hover reveal. The entire surface then peels away and morphs into the window rectangle. Native client pixels stay hidden until detachment, then replace the surface at the same geometry. Minimizing follows the same path in reverse. The intermediate detached body clears the current hub before handing off, including when the Windows hub stays open.
-
-The shell registers exact per-monitor bar anchors, compact drawer dimensions, and the hover drawer's actual DefaultSpatial duration and Bézier curve. Border/fullscreen changes, favorite layout changes, token changes and compositor configuration reloads refresh that registration. Version 1.9 uses those registered motion tokens instead of `windowsMove`. Only explicit favorite launch intents use the opening effect; ordinary launches and transient dialogs retain the compositor's normal animation. Temporary render hooks supply rounding and rounding power only during a flight, without writing window rules. Redirecting a flight reuses its progress variable; restoring during absorption immediately clears its minimized entry. The hidden-workspace handoff remains masked to prevent a full-size flash.
-
-`WindowBubble.qml` receives throttled presentation events and updates stable model rows. A whole `BlobRect` participates in the same Caelestia `BlobGroup` as the border and hover panels, sharing surface color, translucency, smoothing, radius and velocity-driven deformation. Once detached, it switches to an isolated group before fading into the native client, preventing shared-SDF silhouettes. The surface adds no input region or capture renderer. Completion, expiry, close, interruption, plugin reload and session lock remove stale shapes; no polling timer runs while idle. Off-workspace flights do not create visible material surfaces.
+The extension animates presented window geometry while keeping the compositor's layout goals and the client surface resolution intact. Minimize and close share a single departure-geometry helper: the same proportional shrink, size cap and horizontal center, with opposite screen edges. Both use `windowsOut` for geometry and `fadeOut` for opacity, including the configured curves and independent durations. At the end of minimizing, it masks the move to the hidden workspace to avoid a second fade or a full-size flash. Restoration starts at the actual preview or clicked app icon. Interrupted minimize flights retain their current presented geometry.
 
 Closing hooks the compositor's native `CWindowAnimationController::animateOut` context, after the client really closes. The snapshot shrinks upward; the close request itself is not delayed. There is no per-frame renderer hook. The complete ABI hash and the target symbol are checked before hooks are installed, and hooks/listeners are removed on unload.
 

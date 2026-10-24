@@ -1,6 +1,6 @@
 {
   "date": "2026-10-24",
-  "nativePluginVersion": "1.9",
+  "nativePluginVersion": "1.6",
   "environment": {
     "hyprland": "0.56.2",
     "caelestiaShell": "2.3.0",
@@ -128,9 +128,7 @@
       "aspectRatioPreserved": true,
       "fadeDuringMotion": true
     },
-    "screenRecordingUsed": false,
-    "historical": true,
-    "supersededBy": "bubbleMotion"
+    "screenRecordingUsed": false
   },
   "emptyWindowTransition": {
     "passed": true,
@@ -231,175 +229,5 @@
     "fullSizeLoginImageAndExifTests": true,
     "screenRecordingUsed": false,
     "nativeFolderPickerOpened": true
-  },
-  "bubbleMotion": {
-    "passed": true,
-    "scope": [
-      "favorite app hub launch",
-      "minimization",
-      "Windows hub restoration"
-    ],
-    "motionTokens": {
-      "durationMs": 500,
-      "bezier": [
-        0.38,
-        1.21,
-        0.22,
-        1
-      ],
-      "source": "Installed Caelestia hover drawer DefaultSpatial tokens"
-    },
-    "sourceDimensions": "Actual open drawer or registered compact drawer dimensions, per monitor",
-    "material": "One whole BlobRect in the border and hover drawer BlobGroup, using the same translucent color, smoothing, rounding and deformation",
-    "path": "Fixed-size drawer slides out, peels away and morphs into the window; minimization follows the same path backwards",
-    "clientContent": "Hidden during projection, revealed only after surface detachment at matching native geometry",
-    "sharedSdfSilhouettePrevented": true,
-    "perMonitorBarOrigin": true,
-    "offWorkspaceSurfacesSuppressed": true,
-    "idlePolling": false,
-    "portableGeometryChecks": "Exact endpoints, fixed-size reveal, clearance before content handoff, continuous geometry, translated monitors, positive bounds, rounding and alpha limits",
-    "endToEnd": {
-      "passed": true,
-      "cases": [
-        {
-          "backend": "wayland",
-          "unarmedLaunchUnchanged": true,
-          "appHub": {
-            "passed": true,
-            "nativeSamples": 14,
-            "surfaceSamples": 13
-          },
-          "minimize": {
-            "passed": true,
-            "nativeSamples": 16,
-            "surfaceSamples": 14
-          },
-          "windowsHub": {
-            "passed": true,
-            "nativeSamples": 15,
-            "surfaceSamples": 13
-          },
-          "hubKeptOpen": true,
-          "pointerPreserved": true,
-          "originalGeometryPreserved": true
-        },
-        {
-          "backend": "x11",
-          "unarmedLaunchUnchanged": true,
-          "appHub": {
-            "passed": true,
-            "nativeSamples": 15,
-            "surfaceSamples": 13
-          },
-          "minimize": {
-            "passed": true,
-            "nativeSamples": 16,
-            "surfaceSamples": 13
-          },
-          "windowsHub": {
-            "passed": true,
-            "nativeSamples": 15,
-            "surfaceSamples": 13
-          },
-          "hubKeptOpen": true,
-          "pointerPreserved": true,
-          "originalGeometryPreserved": true
-        }
-      ]
-    },
-    "nativeCases": [
-      {
-        "case": "InverseTiled",
-        "passed": true
-      },
-      {
-        "case": "InverseFloat",
-        "passed": true
-      },
-      {
-        "case": "InverseReduced",
-        "passed": true
-      },
-      {
-        "case": "InverseX11",
-        "passed": true
-      }
-    ],
-    "interruptions": [
-      {
-        "case": "cancel",
-        "passed": true
-      },
-      {
-        "case": "restore",
-        "passed": true
-      },
-      {
-        "case": "close",
-        "passed": true
-      },
-      {
-        "case": "reload",
-        "passed": true
-      }
-    ],
-    "closeIsolation": {
-      "passed": true,
-      "cases": [
-        {
-          "backend": "x11",
-          "action": "close Beta",
-          "veto": true,
-          "remaining": 3,
-          "othersStayedMinimized": true,
-          "hubStayedOpen": true
-        },
-        {
-          "backend": "x11",
-          "action": "close Alpha",
-          "veto": false,
-          "remaining": 2,
-          "othersStayedMinimized": true,
-          "hubStayedOpen": true
-        },
-        {
-          "backend": "x11",
-          "action": "close Gamma",
-          "veto": false,
-          "remaining": 1,
-          "othersStayedMinimized": true,
-          "hubStayedOpen": true
-        },
-        {
-          "backend": "wayland",
-          "action": "close Beta",
-          "veto": true,
-          "remaining": 3,
-          "othersStayedMinimized": true,
-          "hubStayedOpen": true
-        },
-        {
-          "backend": "wayland",
-          "action": "close Alpha",
-          "veto": false,
-          "remaining": 2,
-          "othersStayedMinimized": true,
-          "hubStayedOpen": true
-        },
-        {
-          "backend": "wayland",
-          "action": "close Gamma",
-          "veto": false,
-          "remaining": 1,
-          "othersStayedMinimized": true,
-          "hubStayedOpen": true
-        }
-      ]
-    },
-    "existingUserWindowsPreserved": true,
-    "favoritesAndPointerPreserved": true,
-    "privateSlowedStillInspected": true,
-    "screenRecordingUsed": false,
-    "desktopMediaPublished": false
   }
 }
