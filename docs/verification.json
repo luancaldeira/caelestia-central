@@ -8,7 +8,7 @@
   },
   "wallpaperUnitTests": {
     "passed": true,
-    "count": 57
+    "count": 58
   },
   "installationSnapshotTests": {
     "passed": true,
@@ -216,7 +216,7 @@
   },
   "localWallpaperFolders": {
     "passed": true,
-    "portableRegressionTests": 16,
+    "portableRegressionTests": 17,
     "imageRenderer": "awww 0.12.1",
     "independentOfSteam": true,
     "folderManagerLoaded": true,

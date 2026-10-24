@@ -59,7 +59,7 @@ async def startup_catalog(restore, timeout=90, interval=2):
     while True:
         catalog = await asyncio.to_thread(scan)
         chosen = next((i for i in catalog["items"] if i["id"] == str(restore) and not i["missing"]), None)
-        usable = lambda i: not i["missing"] and (i.get("source") == "local" or bool(catalog["assets"] and shutil.which("linux-wallpaperengine")))
+        usable = lambda i: not i["missing"] and available(i, catalog)
         if chosen and not usable(chosen):
             chosen = None
         fallback = next((i for i in catalog["items"] if i["type"] in ("image", "video") and usable(i)), None)
@@ -76,8 +76,9 @@ async def startup_catalog(restore, timeout=90, interval=2):
             return catalog, fallback
         # A fresh local-only installation must expose its folder picker even
         # before any images (or Steam assets) have been configured.
+        binaries = ("awww", "awww-daemon") if str(restore).startswith("local-") else ("linux-wallpaperengine",)
         if ready and "folders" in catalog and (not restore or (expired and not fallback)
-                or (not shutil.which("linux-wallpaperengine") and not str(restore).startswith("local-"))):
+                or not all(shutil.which(binary) for binary in binaries)):
             return catalog, fallback
         reason = ("Hyprland session/monitor" if not ready else
                   "Steam assets" if not catalog["assets"] else "saved Workshop wallpaper")

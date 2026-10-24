@@ -148,13 +148,19 @@ class LocalControllerTests(unittest.IsolatedAsyncioTestCase):
     async def test_startup_local_image_needs_no_steam_or_engine(self):
         item = {"id": "local-one", "source": "local", "type": "image", "missing": False}
         data = {"items": [item], "assets": "", "folders": [{"path": "/pictures"}]}
-        with patch("controller.scan", return_value=data), patch("controller.hypr", return_value=[{"width": 1920, "height": 1080}]), patch("controller.shutil.which", return_value=None):
+        with patch("controller.scan", return_value=data), patch("controller.hypr", return_value=[{"width": 1920, "height": 1080}]), patch("controller.shutil.which", side_effect=lambda name: None if name == "linux-wallpaperengine" else "/usr/bin/" + name):
             self.assertEqual(await startup_catalog(item["id"], timeout=0), (data, item))
 
     async def test_empty_installation_exposes_folder_picker_without_waiting_for_steam(self):
         data = {"items": [], "assets": "", "folders": []}
         with patch("controller.scan", return_value=data), patch("controller.hypr", return_value=[{"width": 1920, "height": 1080}]):
             self.assertEqual(await startup_catalog(None, timeout=0), (data, None))
+
+    async def test_unavailable_local_backend_keeps_the_folder_picker_available(self):
+        item = {"id": "local-one", "source": "local", "type": "image", "missing": False}
+        data = {"items": [item], "assets": "", "folders": []}
+        with patch("controller.scan", return_value=data), patch("controller.hypr", return_value=[{"width": 1920, "height": 1080}]), patch("controller.shutil.which", return_value=None):
+            self.assertEqual(await startup_catalog(item["id"], timeout=0), (data, None))
 
     async def test_missing_optional_engine_does_not_block_the_folder_picker(self):
         item = {"id": "123", "source": "workshop", "type": "video", "missing": False}
