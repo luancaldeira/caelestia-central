@@ -40,6 +40,11 @@ class BootstrapTests(unittest.TestCase):
             self.assertEqual(cli.ensure_service(ready=True), ready)
         self.assertEqual(call.call_count, 2)
 
+    def test_local_only_service_can_wait_for_user_to_choose_a_folder(self):
+        ready = {"running": False, "busy": False, "items": [{"id": "optional-workshop"}], "awaitingSelection": True}
+        with patch.object(cli.subprocess, "run"), patch.object(cli, "call", return_value=ready):
+            self.assertEqual(cli.ensure_service(ready=True), ready)
+
     def test_waits_for_current_instance_and_complete_monitor(self):
         with tempfile.TemporaryDirectory() as tmp:
             runtime = Path(tmp)

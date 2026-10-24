@@ -12,7 +12,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from catalog import CACHE, CONFIG, STATE, RUNTIME, atomic, load, scan
+from catalog import CACHE, CONFIG, STATE, RUNTIME, atomic, load, scan, configure_folder
 import palette
 import previews
 import greeter
@@ -46,6 +46,12 @@ def existing_renderers():
             pass
 
 
+def available(item, catalog):
+    if item.get("source") == "local":
+        return bool(shutil.which("awww") and shutil.which("awww-daemon"))
+    return bool(catalog.get("assets") and shutil.which("linux-wallpaperengine"))
+
+
 async def startup_catalog(restore, timeout=90, interval=2):
     """Wait for boot dependencies without replacing a temporarily absent selection."""
     deadline = time.monotonic() + timeout
@@ -53,17 +59,25 @@ async def startup_catalog(restore, timeout=90, interval=2):
     while True:
         catalog = await asyncio.to_thread(scan)
         chosen = next((i for i in catalog["items"] if i["id"] == str(restore) and not i["missing"]), None)
-        fallback = next((i for i in catalog["items"] if i["type"] == "video" and not i["missing"]), None)
+        usable = lambda i: not i["missing"] and (i.get("source") == "local" or bool(catalog["assets"] and shutil.which("linux-wallpaperengine")))
+        if chosen and not usable(chosen):
+            chosen = None
+        fallback = next((i for i in catalog["items"] if i["type"] in ("image", "video") and usable(i)), None)
         try:
             monitors = await asyncio.to_thread(hypr, "monitors")
             ready = any(not m.get("disabled") and m.get("width", 0) > 0 and m.get("height", 0) > 0 for m in monitors)
         except (OSError, RuntimeError, ValueError, subprocess.SubprocessError):
             ready = False
-        if ready and catalog["assets"] and (chosen or (not restore and fallback)):
+        if ready and (chosen or (not restore and fallback)):
             return catalog, chosen or fallback
         expired = time.monotonic() >= deadline
-        if expired and ready and catalog["assets"] and fallback:
+        if expired and ready and fallback:
             LOG.warning("Saved wallpaper unavailable after boot grace period; using %s", fallback["id"])
+            return catalog, fallback
+        # A fresh local-only installation must expose its folder picker even
+        # before any images (or Steam assets) have been configured.
+        if ready and "folders" in catalog and (not restore or (expired and not fallback)
+                or (not shutil.which("linux-wallpaperengine") and not str(restore).startswith("local-"))):
             return catalog, fallback
         reason = ("Hyprland session/monitor" if not ready else
                   "Steam assets" if not catalog["assets"] else "saved Workshop wallpaper")
@@ -113,6 +127,7 @@ class Controller:
         self.transition_tasks = set()
         self.held_transition = None
         self.last_switch = {}
+        self.awaiting_selection = True
 
     async def theme_for(self, item, force=False):
         prefs = dict(self.data["preferences"].get(item["id"], {}))
@@ -219,6 +234,8 @@ class Controller:
             "busy": self.busy, "switching": self.switching, "message": self.message, "error": self.error,
             "monitor": self.monitor, "theme": self.theme, "preview": self.preview,
             "preferences": self.data["preferences"], "assets": self.catalog["assets"],
+            "folders": self.catalog.get("folders", []),
+            "awaitingSelection": getattr(self, "awaiting_selection", False),
             "updated": time.time(), "service_pid": os.getpid(),
             "session": os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", ""),
             "wayland_display": os.environ.get("WAYLAND_DISPLAY", ""),
@@ -228,9 +245,12 @@ class Controller:
     def request(self, ident, force=False):
         item = self.item(ident)
         if not item:
-            raise ValueError("Wallpaper was not found in local Steam libraries.")
+            raise ValueError("Wallpaper was not found in the library.")
         if item["missing"]:
             raise ValueError("This item is incomplete or does not contain a usable project.")
+        if not available(item, self.catalog):
+            raise ValueError("Local images require awww; Workshop playback requires linux-wallpaperengine and Wallpaper Engine assets.")
+        self.awaiting_selection = False
         self.generation += 1
         self.pending = (item, force, self.generation)
         self.busy = True
@@ -254,8 +274,6 @@ class Controller:
         self.rendered = ""
 
     async def spawn(self, item):
-        if not self.catalog["assets"]:
-            raise ValueError("Wallpaper Engine assets were not found in Steam libraries.")
         monitors = await asyncio.to_thread(hypr, "monitors")
         monitors = [m for m in monitors if not m.get("disabled")]
         if not monitors:
@@ -268,6 +286,11 @@ class Controller:
             self.aspect = 1 / self.aspect
         self.display_signature = [(m["name"], m["width"], m["height"], m.get("scale"), m.get("transform")) for m in monitors]
         self.data["monitor"] = self.monitor
+        if item.get("source") == "local":
+            await self.spawn_image(item, monitors)
+            return None
+        if not self.catalog["assets"] or not shutil.which("linux-wallpaperengine"):
+            raise ValueError("Workshop playback requires linux-wallpaperengine and Wallpaper Engine assets. Local images do not.")
         capture = CACHE / "renders" / f'{item["id"]}-{item["signature"]}.png'
         capture.parent.mkdir(parents=True, exist_ok=True)
         cmd = ["/usr/bin/linux-wallpaperengine"]
@@ -320,6 +343,47 @@ class Controller:
             return capture if capture.is_file() else None
         raise RuntimeError("The renderer did not create a background layer on the expected monitor.")
 
+    async def image_command(self, *args):
+        process = await asyncio.create_subprocess_exec("awww", *args,
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        try:
+            out, err = await asyncio.wait_for(process.communicate(), 15)
+        except (asyncio.TimeoutError, asyncio.CancelledError):
+            process.kill()
+            await process.wait()
+            raise
+        if process.returncode:
+            raise RuntimeError(err.decode(errors="replace").strip() or "The image renderer did not respond.")
+        return out.decode(errors="replace")
+
+    async def spawn_image(self, item, monitors):
+        if not shutil.which("awww") or not shutil.which("awww-daemon"):
+            raise ValueError("Local wallpapers require awww and awww-daemon. Wallpaper Engine is optional.")
+        if not self.process or self.process.poll() is not None:
+            logpath = STATE / "logs/local-images.log"
+            logpath.parent.mkdir(parents=True, exist_ok=True)
+            with logpath.open("a") as out:
+                self.process = subprocess.Popen(["awww-daemon", "--namespace", "caelestia-central", "--no-cache"],
+                    stdin=subprocess.DEVNULL, stdout=out, stderr=out)
+            for _ in range(100):
+                if self.process.poll() is not None:
+                    raise RuntimeError(f"The local image renderer stopped. Check {logpath}.")
+                try:
+                    await self.image_command("query", "--namespace", "caelestia-central")
+                    break
+                except RuntimeError:
+                    await asyncio.sleep(.025)
+            else:
+                raise RuntimeError("The local image renderer did not become ready.")
+        # The shell owns the splash. Applying instantly here keeps its image
+        # and theme reveal synchronized, without a second background transition.
+        await self.image_command("img", "--namespace", "caelestia-central", "--outputs",
+                    ",".join(m["name"] for m in monitors), "--transition-type", "none", "--", item["file"])
+        await asyncio.sleep(.065)
+        if self.process.poll() is not None:
+            raise RuntimeError("The local image renderer stopped while applying the wallpaper.")
+        self.rendered = item["id"]
+
     async def worker(self):
         while True:
             await self.wake.wait()
@@ -353,7 +417,9 @@ class Controller:
                     if generation != self.generation:
                         continue
                     stop_start = time.monotonic()
-                    await self.stop_renderer(fast=True)
+                    current = self.item(self.rendered)
+                    if not (current and current.get("source") == "local" and item.get("source") == "local"):
+                        await self.stop_renderer(fast=True)
                     timing["stopMs"] = round((time.monotonic() - stop_start) * 1000)
                     render_start = time.monotonic()
                     await self.spawn(item)
@@ -444,12 +510,12 @@ class Controller:
             current = self.item(self.data.get("active", ""))
             if previous and self.rendered:
                 if not current or current["missing"]:
-                    fallback = next((i for i in self.catalog["items"] if i["type"] == "video" and not i["missing"]
-                                     and self.data["compatibility"].get(i["id"], {}).get("state") != "error"), None)
+                    fallback = next((i for i in self.catalog["items"] if i["type"] in ("image", "video") and not i["missing"]
+                                     and available(i, self.catalog) and self.data["compatibility"].get(i["id"], {}).get("state") != "error"), None)
                     if fallback:
                         self.request(fallback["id"])
                         if shutil.which("notify-send"):
-                            subprocess.Popen(["notify-send", "-a", "Steam Wallpapers", "Wallpaper removed from the library",
+                            subprocess.Popen(["notify-send", "-a", "Wallpapers", "Wallpaper removed from the library",
                                               f'Switching back to {fallback["title"]}.'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 elif current["signature"] != previous["signature"]:
                     self.request(current["id"])
@@ -487,14 +553,18 @@ class Controller:
             return load(STATE / "status.json", {})
         if action == "refresh":
             await self.refresh()
+        elif action in ("folder-add", "folder-remove"):
+            configure_folder(ident, remove=action == "folder-remove")
+            await self.refresh()
         elif action == "apply":
             self.recovery_attempted = False
             self.request(ident)
         elif action == "restore":
-            self.request(self.data.get("active") or "2855646333")
+            ident = self.data.get("active") or next((i["id"] for i in self.catalog["items"] if not i["missing"]), "")
+            self.request(ident)
         elif action in ("next", "random"):
             eligible = [i for i in self.catalog["items"] if not i["missing"] and
-                        i["type"] in ("scene", "video") and self.data["compatibility"].get(i["id"], {}).get("state") != "error"]
+                        i["type"] in ("scene", "video", "image") and available(i, self.catalog) and self.data["compatibility"].get(i["id"], {}).get("state") != "error"]
             if not eligible:
                 raise ValueError("No wallpapers are available.")
             active = self.rendered or self.data.get("active")
@@ -613,7 +683,7 @@ class Controller:
                 item = self.item(self.data.get("active", ""))
                 self.recovery_at = now + self.recovery_delay
                 self.recovery_delay = min(60, self.recovery_delay * 2)
-                if item and not item["missing"]:
+                if item and not item["missing"] and available(item, self.catalog):
                     LOG.warning("Renderer stopped; restoring %s", item["id"])
                     self.request(item["id"])
             if ticks % 15 == 0:
@@ -624,6 +694,7 @@ class Controller:
         # systemd owns this wait/retry, so boot ordering cannot leave an active
         # controller with no renderer simply because Steam/outputs were late.
         self.catalog, chosen = await startup_catalog(self.data.get("active"))
+        self.awaiting_selection = chosen is None
         # Migrate the manually launched engine. Verify actual executable and UID;
         # never match command text (which can include this script's own command).
         for pid in existing_renderers():
@@ -639,8 +710,6 @@ class Controller:
             raise RuntimeError("A previous renderer did not stop; a second instance was not started.")
         self.engine_lock = (RUNTIME / "linux-wallpaperengine.lock").open("w")
         fcntl.flock(self.engine_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        if shutil.which("awww"):
-            subprocess.run(["awww", "kill"], capture_output=True, timeout=3)
         SOCKET.unlink(missing_ok=True)
         server = await asyncio.start_unix_server(self.client, path=SOCKET, limit=65536)
         os.chmod(SOCKET, 0o600)
@@ -651,6 +720,9 @@ class Controller:
         self.publish()
         if chosen:
             self.request(chosen["id"])
+        else:
+            self.message = "Add a wallpaper folder to get started."
+            self.publish()
         tasks = [asyncio.create_task(self.worker()), asyncio.create_task(self.health())]
         failures = []
         def supervise(task):

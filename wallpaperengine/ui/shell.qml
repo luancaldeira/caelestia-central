@@ -1,5 +1,7 @@
 import QtQuick
+import QtQuick.Window
 import QtQuick.Controls.Basic
+import QtQuick.Dialogs as Dialogs
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
@@ -87,7 +89,7 @@ ShellRoot {
         } catch (e) { actionError = "Waiting for library data…"; }
     }
     function typeLabel(item): string {
-        return item.type === "scene" ? "Animated scene" : item.type === "video" ? "Video" : item.type === "web" ? "Web · check compatibility" : "Unknown type";
+        return item.type === "scene" ? "Animated scene" : item.type === "video" ? "Video" : item.type === "web" ? "Web · check compatibility" : item.type === "image" ? "Local image" : "Unknown type";
     }
     function navigate(delta): void {
         if (!filtered.length) return;
@@ -139,7 +141,11 @@ ShellRoot {
         function selectItem(id: string): void { root.selectedId = id; previewTimer.restart(); }
         function setSearch(query: string): void { search.text = query; }
         function applySelection(): void { root.applySelected(); }
-        function info(): string { return JSON.stringify({open: root.opened, selected: root.selectedId, items: root.filtered.length}); }
+        function folders(): void { folderManager.open(); }
+        function closeFolders(): void { folderManager.close(); }
+        function chooseFolder(): void { localFolder.open(); }
+        function cancelFolder(): void { localFolder.close(); }
+        function info(): string { return JSON.stringify({open: root.opened, selected: root.selectedId, items: root.filtered.length, foldersOpen:folderManager.opened,choosingFolder:localFolder.visible}); }
     }
 
     component ActionButton: Button {
@@ -169,6 +175,14 @@ ShellRoot {
     }
 
     // A single static handoff image covers the gap while the old engine exits.
+    Dialogs.FolderDialog {
+        id: localFolder
+        parentWindow: panel.Window.window
+        title: "Choose a wallpaper folder"
+        currentFolder: "file://" + Quickshell.env("HOME")
+        onAccepted: root.run(["folder-add", decodeURIComponent(selectedFolder.toString().replace(/^file:\/\//, ""))])
+    }
+
     // It is never a second engine and is removed once the new background maps.
     PanelWindow {
         visible: !!root.state.switching && !!root.state.theme?.poster
@@ -210,6 +224,37 @@ ShellRoot {
                 if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) { root.applySelected(); event.accepted = true; }
             }
 
+            Popup {
+                id: folderManager
+                anchors.centerIn: parent
+                width: Math.min(640, panel.width - 48)
+                height: Math.min(380, panel.height - 48)
+                modal: true
+                padding: 20
+                background: Rectangle { color: root.surface; radius: 20; border.color: root.outline }
+                contentItem: ColumnLayout {
+                    spacing: 12
+                    Text { text: "Wallpaper folders"; font.pixelSize: 22; color: root.ink }
+                    ListView {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        clip: true
+                        model: root.state.folders || []
+                        delegate: RowLayout {
+                            required property var modelData
+                            width: ListView.view.width
+                            Text { Layout.fillWidth: true; text: parent.modelData.path; color: parent.modelData.available ? root.ink : root.col("error", "#ffb4ab"); elide: Text.ElideMiddle }
+                            ActionButton { text: "Remove"; onClicked: root.run(["folder-remove", parent.modelData.path]) }
+                        }
+                        Text { anchors.centerIn: parent; visible: (root.state.folders || []).length === 0; text: "No local folders added"; color: root.muted }
+                    }
+                    RowLayout {
+                        ActionButton { text: "Add folder"; onClicked: localFolder.open() }
+                        Item { Layout.fillWidth: true }
+                        ActionButton { text: "Done"; onClicked: folderManager.close() }
+                    }
+                }
+            }
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: 24
@@ -219,9 +264,10 @@ ShellRoot {
                     ColumnLayout {
                         spacing: 2
                         Text { text: "Your wallpapers"; font.pixelSize: 27; font.weight: Font.DemiBold; color: root.ink }
-                        Text { text: "Steam Workshop · " + (root.state.items?.length || 0) + " in your library"; font.pixelSize: 13; color: root.muted }
+                        Text { text: "Local & Workshop · " + (root.state.items?.length || 0) + " in your library"; font.pixelSize: 13; color: root.muted }
                     }
                     Item { Layout.fillWidth: true }
+                    ActionButton { text: "Folders"; onClicked: folderManager.open() }
                     ActionButton { text: "Random"; onClicked: root.run(["random"]) }
                     ActionButton { text: "Next →"; onClicked: root.run(["next"]) }
                     ActionButton { text: "↻"; Accessible.name: "Refresh library"; onClicked: root.run(["refresh"]) }

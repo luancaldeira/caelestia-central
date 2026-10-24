@@ -1,6 +1,6 @@
 # Caelestia Central
 
-A compact bottom-edge hub for favorite apps, minimized windows, and Steam Workshop wallpapers, built around Caelestia's native motion and translucent surfaces.
+A compact bottom-edge hub for favorite apps, minimized windows, and local or Steam Workshop wallpapers, built around Caelestia's native motion and translucent surfaces.
 
 [Installation](docs/INSTALLATION.md) · [Architecture](docs/ARCHITECTURE.md)
 
@@ -11,24 +11,24 @@ A compact bottom-edge hub for favorite apps, minimized windows, and Steam Worksh
 - **Apps** opens Caelestia's native launcher. Clicking a favorite launches its window from the icon, or brings back an existing window without launching a duplicate.
 - **Windows** shows minimized windows in a compact, finite horizontal list. It opens at the middle preview, with neighboring cards peeking in at the edges. Scroll in either direction; the ends do not wrap. Restoring a window grows it from its preview and keeps the hub open for another selection.
 - Minimize buttons and **Super+M** send windows into the hub. Closing a minimized window closes only that window. Other minimized windows remain hidden, including when an X11 toolkit updates their state after a sibling closes.
-- **Wallpapers** uses a rectangular Cover Flow carousel with perspective and reflections. Right-click to favorite; favorites appear first the next time the library opens.
+- **Wallpapers** reads image folders you choose, with optional Steam Workshop integration. Open the folder button to add or remove folders without moving your files. It uses a rectangular Cover Flow carousel with perspective and reflections. Right-click to favorite; favorites appear first the next time the library opens.
 - Wallpaper changes reveal the live wallpaper and the new shell colors through a soft circular splash originating at the pointer. Scene captures and video frames improve carousel preview quality.
 - The saved wallpaper starts with the graphical session without opening the hub. Login backgrounds use a separate full-size still; compatible Caelestia greetd installations can opt into a persistent public export.
 - Closing a visible application shrinks it upward, visually distinguishing closing from minimizing downward offscreen.
 
-## Wallpaper integration and current limitation
+## Wallpaper sources
 
-The wallpaper subsystem is an independent **integration/extension of [Almamu/linux-wallpaperengine](https://github.com/Almamu/linux-wallpaperengine)**. That project provides rendering; this repository adds Steam library synchronization, selection, favorites, preview preparation, Caelestia colors, and transitions. The renderer is a separate dependency and is not bundled or reimplemented here.
+**Wallpaper Engine is optional.** Open **Wallpapers → folder icon → Add folder** and select any readable directory on your device. The hub indexes JPG/JPEG, PNG, WebP, BMP and GIF files, including subfolders. Local playback uses the separately installed [awww](https://codeberg.org/LGFae/awww) image/GIF renderer; no Steam installation or Wallpaper Engine assets are needed. Favorites, high-quality previews, theme colors, the splash and login stills work with both sources.
 
-**Local wallpapers from your computer are not supported yet.** The integration currently follows the Steam Workshop library model: it indexes downloaded Wallpaper Engine Workshop projects for Steam app `431960`. Arbitrary local images, videos, and wallpaper folders outside that library cannot be imported into the central. This describes this integration's scope, rather than a limitation claimed for every upstream rendering mode.
+Folders are watched for new, replaced and deleted images. Removing a folder only removes its entries from the library; it never deletes your files. Hidden files/directories, directory symlinks and links escaping the selected folder are skipped. Local video files and Wallpaper Engine scene projects outside Steam libraries are not imported by the folder source.
 
-A legitimate Wallpaper Engine installation and its assets are required. Unsubscribed items disappear from the central even if Steam leaves their folders behind. No Workshop content is downloaded or redistributed by this repository. Scene/video compatibility depends on the installed renderer; web wallpapers are excluded from automatic next/random selection.
+The optional Workshop backend remains an independent **integration/extension of [Almamu/linux-wallpaperengine](https://github.com/Almamu/linux-wallpaperengine)**. That project supplies Workshop scene/video rendering; this repository adds library synchronization, selection, favorites, previews, Caelestia colors and transitions. The renderer is not bundled or reimplemented here. This backend requires a legitimate Wallpaper Engine installation and its assets. Unsubscribed items disappear even if Steam leaves their folders behind. No Workshop content is downloaded or redistributed. Compatibility depends on the installed renderer; web wallpapers are excluded from automatic selection.
 
 ## Requirements
 
 The validated combination is **Hyprland 0.56.2 with Lua configuration**, **Caelestia Shell 2.3.0**, and **Quickshell 0.3.1**, plus the installed Caelestia C++ QML modules and CLI. The native extension uses Hyprland internals and must be compiled against headers matching the running compositor. It checks the complete ABI hash before loading. Other Hyprland releases require porting and validation.
 
-The controller also needs Python 3.11+, Pillow, materialyoucolor, the Caelestia Python package, FFmpeg/ffprobe, grim, systemd user services, and a separately installed `linux-wallpaperengine`. Build dependencies include a C++23 compiler, pkg-config, matching Hyprland headers, and ripgrep. See [installation and recovery](docs/INSTALLATION.md).
+The controller also needs Python 3.11+, Pillow, materialyoucolor, the Caelestia Python package, FFmpeg/ffprobe, grim, systemd user services, and at least one renderer: `awww` + `awww-daemon` for local images (validated with 0.12.1), or `linux-wallpaperengine` for Workshop content. Build dependencies include a C++23 compiler, pkg-config, matching Hyprland headers, and ripgrep. See [installation and recovery](docs/INSTALLATION.md).
 
 ```sh
 git clone https://github.com/luancaldeira/caelestia-central.git
@@ -53,7 +53,8 @@ Keep the checkout in place: installation creates configuration symlinks and snap
 | Toggle an app/wallpaper favorite | Right-click its icon/card; F also works for wallpapers |
 | Back / close | Escape |
 | Open the separate wallpaper library | Super+Alt+W |
-| Random / next Workshop wallpaper | Super+Shift+W / Super+Ctrl+W |
+| Add / remove local wallpaper folders | Folder icon in Wallpapers |
+| Random / next wallpaper | Super+Shift+W / Super+Ctrl+W |
 
 ## Development
 

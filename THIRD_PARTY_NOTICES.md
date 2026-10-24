@@ -14,7 +14,13 @@ Source: https://github.com/Almamu/linux-wallpaperengine
 
 Installed integration baseline: `b016d7d1fdcf4e5fd2f9c9fa420a8aaa07fee02d` (GPL-3.0).
 
-The wallpaper subsystem is an independent integration/extension of this project. Its renderer is not bundled. The scene package/texture reader follows upstream PKGV/TEX structures. Rendering capabilities belong to the upstream project; this repository contributes library/UI/controller integration and shell transitions.
+The optional Workshop backend is an independent integration/extension of this project. Its renderer is not bundled. The scene package/texture reader follows upstream PKGV/TEX structures. Rendering capabilities belong to the upstream project; this repository contributes library/UI/controller integration and shell transitions.
+
+## awww
+
+Source: https://codeberg.org/LGFae/awww (GPL-3.0-only).
+
+The local image/GIF backend invokes the separately installed awww client and its daemon in a dedicated namespace. Neither binary is bundled. Local playback does not require linux-wallpaperengine or Steam. Validated runtime: awww 0.12.1.
 
 ## Hyprland, Quickshell, and related projects
 

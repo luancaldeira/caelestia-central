@@ -1,5 +1,5 @@
 [Unit]
-Description=Steam Workshop wallpapers and Caelestia colour controller
+Description=Local and Workshop wallpapers and Caelestia colour controller
 StartLimitIntervalSec=0
 
 [Service]

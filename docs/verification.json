@@ -1,5 +1,5 @@
 {
-  "date": "2026-10-23",
+  "date": "2026-10-24",
   "nativePluginVersion": "1.6",
   "environment": {
     "hyprland": "0.56.2",
@@ -8,7 +8,7 @@
   },
   "wallpaperUnitTests": {
     "passed": true,
-    "count": 40
+    "count": 57
   },
   "installationSnapshotTests": {
     "passed": true,
@@ -213,5 +213,21 @@
     },
     "existingUserWindowsPreserved": true,
     "screenRecordingUsed": false
+  },
+  "localWallpaperFolders": {
+    "passed": true,
+    "portableRegressionTests": 16,
+    "imageRenderer": "awww 0.12.1",
+    "independentOfSteam": true,
+    "folderManagerLoaded": true,
+    "unicodeAndSpacePaths": true,
+    "automaticAdditionAndRemoval": true,
+    "localDaemonReused": true,
+    "secondLocalSwitchReadyMs": 335,
+    "favoritesAndPalette": true,
+    "previousWorkshopWallpaperRestored": true,
+    "fullSizeLoginImageAndExifTests": true,
+    "screenRecordingUsed": false,
+    "nativeFolderPickerOpened": true
   }
 }

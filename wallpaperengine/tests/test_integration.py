@@ -136,6 +136,7 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         c.recovery_at = 0
         c.recovery_delay = 4
         c.data = {"active": "1"}
+        c.catalog = {"assets": "/steam/assets"}
         c.item = lambda ident: {"id": ident, "missing": False}
         c.request = Mock()
         ticks = 0

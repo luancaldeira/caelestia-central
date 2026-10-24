@@ -26,7 +26,7 @@ Closing hooks the compositor's native `CWindowAnimationController::animateOut` c
 
 ## Wallpaper integration
 
-`wallpaperengine/` extends the separately installed Almamu/linux-wallpaperengine renderer. `catalog.py` discovers downloaded Workshop projects; `subscriptions.py` synchronizes Steam metadata; `previews.py` prepares cached posters from video frames, rendered captures, or recoverable scene artwork. Scene package/texture parsing follows the installed upstream format. It does not start an additional live renderer to make each preview.
+`wallpaperengine/` manages two independent sources. `catalog.py` combines explicitly selected image folders from `localfiles.py` with downloaded Workshop projects; `subscriptions.py` synchronizes Steam metadata; `previews.py` prepares cached posters from video frames, rendered captures, or recoverable scene artwork. Scene package/texture parsing follows the installed upstream format. It does not start an additional live renderer to make each preview.
 
 `controller.py` serializes renderer changes, preserves the latest requested selection, and handles recovery. `palette.py` generates Material color roles through the Caelestia Python utilities and writes only the shell's scheme state. Legacy serialized intensity identifiers are retained for preference compatibility; all displayed labels are English.
 
@@ -36,4 +36,8 @@ Display stills are independent of palette samples. A background task prepares th
 
 `transition.py` prepares a private runtime capture of the previous desktop while the new wallpaper and colors become ready. `WallpaperTransition.qml` and `modules/wallpaper/splash.frag` reveal the new live scene through a soft circular mask. The overlay receives no pointer/keyboard input and has a timeout, lock/workspace cancellation, and capture cleanup. Captures are temporary runtime data, not library items.
 
-Only Steam Workshop Wallpaper Engine projects are indexed. No arbitrary local-image/video importer exists yet. The rendering engine and Workshop assets remain separate dependencies.
+Local image/GIF IDs are namespaced hashes of canonical paths; modification signatures include size and nanosecond timestamps. Overlapping folder roots deduplicate files. Scans never change originals and skip hidden entries, symlink directories and escaping file links. Inotify watches scanned directories, missing-root parents and the settings file's parent to handle atomic saves; periodic refresh covers missed events. Settings updates retain unrelated keys.
+
+Local playback uses a child `awww-daemon --namespace caelestia-central --no-cache`, and the client addresses only that namespace. Image-to-image changes reuse that process. It applies the final image without its own transition so the shell splash controls the reveal and colors. Shutdown terminates only the owned child; it does not kill unrelated awww instances. Workshop playback uses the separately installed Almamu/linux-wallpaperengine and Wallpaper Engine assets. Neither Steam nor that engine is required for local images. Local video files are not indexed.
+
+A fresh empty library exposes IPC immediately once the compositor is ready. Existing saved selections still receive a boot grace period for temporarily unavailable drives or Steam libraries. Available local images participate in next/random and removal fallback; unavailable optional renderers are excluded.

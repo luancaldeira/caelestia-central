@@ -15,7 +15,7 @@ import struct
 import subprocess
 import tempfile
 
-from PIL import Image
+from PIL import Image, ImageOps
 
 LOG = logging.getLogger("wallpaperengine.previews")
 LIMIT = 128 * 1024 * 1024
@@ -174,11 +174,11 @@ def prepare(item, cache):
         existing = cached(item, cache)
         if existing.get("previewWidth"):
             return existing
-    image, source = None, "original thumbnail"
+    image, source = None, "local image" if item.get("source") == "local" else "original thumbnail"
     try:
         if render:
             with Image.open(render) as opened:
-                image = opened.convert("RGB")
+                image = ImageOps.exif_transpose(opened).convert("RGB")
             source = "rendered scene capture"
         elif item["type"] == "video" and item.get("file"):
             probe = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "json", item["file"]],
@@ -189,11 +189,11 @@ def prepare(item, cache):
                                     "-threads", "2", "-f", "image2pipe", "-vcodec", "png", "pipe:1"],
                                    capture_output=True, timeout=12, check=True)
             with Image.open(io.BytesIO(frame.stdout)) as opened:
-                image = opened.convert("RGB")
+                image = ImageOps.exif_transpose(opened).convert("RGB")
             source = "video frame"
         else:
             with Image.open(item["preview"]) as opened:
-                image = opened.convert("RGB")
+                image = ImageOps.exif_transpose(opened).convert("RGB")
             if item["type"] == "scene" and (image.width < 840 or image.height < 488):
                 try:
                     original = scene_image(item)
@@ -255,9 +255,12 @@ def prepare_login_wallpaper(item, cache, rendered=None):
 
     image = None
     try:
-        if rendered:
+        if item.get("source") == "local":
+            with Image.open(item["file"]) as opened:
+                image = ImageOps.exif_transpose(opened).convert("RGB")
+        elif rendered:
             with Image.open(rendered) as opened:
-                image = opened.convert("RGB")
+                image = ImageOps.exif_transpose(opened).convert("RGB")
         elif item.get("type") == "video" and item.get("file"):
             probe = subprocess.run(
                 ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "json", item["file"]],
@@ -272,7 +275,7 @@ def prepare_login_wallpaper(item, cache, rendered=None):
                 capture_output=True, timeout=20, check=True,
             )
             with Image.open(io.BytesIO(frame.stdout)) as opened:
-                image = opened.convert("RGB")
+                image = ImageOps.exif_transpose(opened).convert("RGB")
         elif item.get("type") == "scene":
             image = scene_image(item)
     except (OSError, ValueError, KeyError, IndexError, TypeError, struct.error, subprocess.SubprocessError):
@@ -288,7 +291,7 @@ def prepare_login_wallpaper(item, cache, rendered=None):
         if item.get("type") == "video":
             return str(source)
         with Image.open(source) as opened:
-            image = opened.convert("RGB")
+            image = ImageOps.exif_transpose(opened).convert("RGB")
 
     image.thumbnail((2560, 1440), Image.Resampling.LANCZOS)
     target.parent.mkdir(parents=True, exist_ok=True)

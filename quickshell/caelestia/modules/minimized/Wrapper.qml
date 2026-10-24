@@ -280,6 +280,13 @@ Item {
             text: root.activeTab === 1 ? "All in view" : "Library is empty"
             font: Tokens.font.title.large
         }
+        IconTextButton {
+            anchors.horizontalCenter: parent.horizontalCenter
+            visible: root.activeTab === 2
+            icon: "create_new_folder"
+            text: "Add a wallpaper folder"
+            onClicked: WallpaperLibrary.manageFolders()
+        }
     }
     Column {
         anchors.bottom: parent.bottom
@@ -302,12 +309,23 @@ Item {
             color: Colours.palette.m3primary
         }
     }
+    IconButton {
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.margins: 8
+        z: 310
+        visible: root.activeTab === 2
+        icon: "folder_open"
+        type: IconButton.Text
+        Accessible.name: "Wallpaper folders"
+        onClicked: WallpaperLibrary.manageFolders()
+    }
     StyledText {
         id: statusNotice
         anchors.top: parent.top
         anchors.topMargin: 8
         anchors.horizontalCenter: parent.horizontalCenter
-        width: parent.width - 48
+        width: parent.width - 112
         horizontalAlignment: Text.AlignHCenter
         elide: Text.ElideRight
         visible: text.length > 0

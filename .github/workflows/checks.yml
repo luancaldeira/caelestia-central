@@ -24,6 +24,8 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Library synchronization and preview tests
         run: python -m unittest discover -s wallpaperengine/tests -p test_library_sync.py -v
+      - name: Local folder and independent renderer tests
+        run: python -m unittest discover -s wallpaperengine/tests -p test_local_folders.py -v
       - name: Wallpaper transition lifecycle tests
         run: python -m unittest discover -s wallpaperengine/tests -p test_transition.py -v
       - name: Session startup regressions

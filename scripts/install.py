@@ -68,7 +68,9 @@ class Snapshot:
 
 
 def check():
-    missing = [b for b in ("qs", "hyprctl", "c++", "pkg-config", "rg", "ffmpeg", "ffprobe", "grim", "systemctl", "linux-wallpaperengine") if not shutil.which(b)]
+    missing = [b for b in ("qs", "hyprctl", "c++", "pkg-config", "rg", "ffmpeg", "ffprobe", "grim", "systemctl") if not shutil.which(b)]
+    if not ((shutil.which("awww") and shutil.which("awww-daemon")) or shutil.which("linux-wallpaperengine")):
+        missing.append("awww + awww-daemon (local images), or linux-wallpaperengine (Workshop)")
     for module in ("PIL", "materialyoucolor", "caelestia"):
         if importlib.util.find_spec(module) is None:
             missing.append("Python module: " + module)
@@ -122,7 +124,7 @@ def main():
     for path, value in ((shell_path, shell), (cli_path, cli)):
         snapshot.write(path, json.dumps(value, indent=4) + "\n")
     desktop = Path.home() / ".local/share/applications/wallpaperengine-picker.desktop"
-    snapshot.write(desktop, '[Desktop Entry]\nType=Application\nName=Steam Wallpapers\nComment=Choose Steam wallpapers and Caelestia colors\nIcon=preferences-desktop-wallpaper\nExec="' + str(config / 'wallpaperengine/wallpaperctl') + '" ui\nTerminal=false\nCategories=Settings;DesktopSettings;\nKeywords=wallpaper;steam;theme;colors;\n')
+    snapshot.write(desktop, '[Desktop Entry]\nType=Application\nName=Wallpapers\nComment=Choose local and Workshop wallpapers with Caelestia colors\nIcon=preferences-desktop-wallpaper\nExec="' + str(config / 'wallpaperengine/wallpaperctl') + '" ui\nTerminal=false\nCategories=Settings;DesktopSettings;\nKeywords=wallpaper;steam;theme;colors;\n')
     if line not in original:
         snapshot.write(main_config, original.rstrip() + "\n\n-- Caelestia Central\n" + line + "\n")
     subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)

@@ -1,14 +1,17 @@
-# Steam Wallpaper Engine integration
+# Local and Workshop wallpaper integration
 
-This is the wallpaper subsystem of [Caelestia Central](../README.md), an independent integration/extension of [Almamu/linux-wallpaperengine](https://github.com/Almamu/linux-wallpaperengine). The separately installed upstream renderer supplies scene/video playback. This layer supplies Steam subscription synchronization, favorites, cached high-quality posters, color generation, a picker, and the live wallpaper splash.
+This is the wallpaper subsystem of [Caelestia Central](../README.md). Local images and GIFs use [awww](https://codeberg.org/LGFae/awww), independently of Steam. The optional Workshop backend is an independent integration/extension of [Almamu/linux-wallpaperengine](https://github.com/Almamu/linux-wallpaperengine), whose separately installed renderer supplies Workshop scene/video playback. This layer supplies folder and Steam subscription synchronization, favorites, cached high-quality posters, color generation, a picker, and the live wallpaper splash.
 
-**Arbitrary local wallpapers are not supported yet.** The library indexes downloaded Wallpaper Engine Steam Workshop projects for app `431960`. Files elsewhere on your computer cannot be imported into this UI. This is the current integration scope, not a general restriction claimed for every upstream renderer mode.
+Choose **Wallpapers → folder icon → Add folder**, or **Folders** in the separate picker. Supported local formats: JPG/JPEG, PNG, WebP, BMP and GIF. Subfolders are included; hidden entries, directory symlinks and file symlinks outside the chosen folder are excluded. Arbitrary local videos are not imported. Removing a folder never deletes its files. No default folder is scanned without your selection.
 
-Install the whole extension with `python3 scripts/install.py` from the repository root. See [installation](../docs/INSTALLATION.md), [architecture](../docs/ARCHITECTURE.md), and [testing](../docs/TESTING.md).
+Commands (the historical `wallpaperengine` config/state paths remain compatible):
 
 ```sh
 ~/.config/wallpaperengine/wallpaperctl session
 ~/.config/wallpaperengine/wallpaperctl ui
+~/.config/wallpaperengine/wallpaperctl folder-add "$HOME/Pictures/Wallpapers"
+~/.config/wallpaperengine/wallpaperctl folders
+~/.config/wallpaperengine/wallpaperctl folder-remove "$HOME/Pictures/Wallpapers"
 ~/.config/wallpaperengine/wallpaperctl refresh
 ~/.config/wallpaperengine/wallpaperctl next
 ~/.config/wallpaperengine/wallpaperctl random
@@ -16,7 +19,7 @@ Install the whole extension with `python3 scripts/install.py` from the repositor
 journalctl --user -u wallpaperengine.service
 ```
 
-The controller maintains one managed renderer, detects library changes, restores the saved selection at session startup, and recovers from temporary renderer failures. Workshop content and Wallpaper Engine assets must already exist in your Steam libraries. Compatibility depends on the renderer; automatic selection excludes web wallpapers.
+The controller maintains one managed renderer, detects library changes, restores the saved selection at session startup, and recovers from temporary renderer failures. Local playback requires `awww` and `awww-daemon`; Workshop playback separately requires linux-wallpaperengine, Workshop content and Wallpaper Engine assets. A fresh installation starts the library service with no images configured, so you can choose a folder. Compatibility of Workshop content depends on its renderer; automatic selection excludes web wallpapers and unavailable backends.
 
 `wallpaperctl session` waits for the current Hyprland instance's IPC, Wayland socket and monitor before importing its display into the user service. Initial configuration load and compositor start can both invoke it: a session lock and controller identity prevent duplicate restarts. It starts unloaded units directly rather than treating `reset-failed` as a prerequisite. Bootstrap diagnostics are recorded under `~/.local/state/wallpaperengine/logs/session.log`.
 

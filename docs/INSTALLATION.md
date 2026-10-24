@@ -4,7 +4,9 @@
 
 This repository contains the modified QML source for Caelestia Shell 2.3.0. Its separately installed `Caelestia` and `Caelestia.Config` C++ QML modules must match that shell version. The native compositor extension targets Hyprland 0.56.2, including its Lua dispatch API and exact native ABI. Quickshell and the system Qt libraries must be built for compatible versions.
 
-Install Caelestia and its documented dependencies first. Install linux-wallpaperengine independently, following [its upstream instructions](https://github.com/Almamu/linux-wallpaperengine). Install Wallpaper Engine in Steam and download Workshop items you own or are entitled to use. The renderer needs Wallpaper Engine's `assets` directory.
+Install Caelestia and its documented dependencies first. For local image/GIF folders, install **awww** (client and daemon; validated with 0.12.1). Steam and Wallpaper Engine are not needed for this source.
+
+For optional Workshop playback, install linux-wallpaperengine independently, following [its upstream instructions](https://github.com/Almamu/linux-wallpaperengine). Install Wallpaper Engine in Steam and download Workshop items you own or are entitled to use. The renderer needs Wallpaper Engine's `assets` directory.
 
 The validated engine installation exposes `/usr/bin/linux-wallpaperengine` and places its library/binary under `/opt/linux-wallpaperengine`. The controller currently checks that installed layout. Other packaging layouts require adapting `wallpaperengine/controller.py` before use; the installer does not relocate engine files.
 
@@ -17,11 +19,27 @@ python3 scripts/install.py
 
 The check is read-only. Installation compiles the native plugin locally, snapshots configuration under `$XDG_STATE_HOME/caelestia-central/backups/` (normally `~/.local/state/caelestia-central/backups/`), and links the shell, controller, plugin source directory, Lua integration module, and systemd unit into the standard configuration locations. It adds `require("lua.caelestia-central")` to an existing `hyprland.lua`.
 
-It disables Caelestia's static wallpaper layer so the live engine background remains visible. Wallpaper palette changes are scoped to Caelestia: native CLI theme writers for unrelated applications are disabled in `caelestia/cli.json`. Other configuration keys are preserved. It also installs an English desktop entry named **Steam Wallpapers**.
+It disables Caelestia's static wallpaper layer so the managed wallpaper background remains visible. Wallpaper palette changes are scoped to Caelestia: native CLI theme writers for unrelated applications are disabled in `caelestia/cli.json`. Other configuration keys are preserved. It also installs an English desktop entry named **Wallpapers**.
 
 Keep the checkout at its installed location. Log out and back in to start the shell and controller in the same graphical session. This does not enable automatic session locking. Remove earlier custom central integrations before installing to avoid registering the same shortcuts twice.
 
 Review the bindings in `hypr/lua/caelestia-central.lua`, especially **Super+M**, before installation. The optional `examples/animations.lua` supplies the compositor motion preset used on the development desktop; it is not automatically applied over your existing animation preferences. The shell's own dashboard-style motion is included in the QML.
+
+## Local wallpaper folders
+
+Open the central's **Wallpapers** view, click the folder icon, then **Add folder**. The separate wallpaper picker also has a **Folders** button. You can add multiple folders, including mounted drives, and remove them from the library without deleting their contents. JPG/JPEG, PNG, WebP, BMP and GIF files are included recursively. Hidden entries, directory symlinks and file links escaping the selected root are skipped. Local video files are not supported by this source.
+
+The controller watches for additions, replacements and deletions. Missing drives remain listed as unavailable; their parent directory is watched for reconnection and periodic rescanning remains a fallback. A file keeps its favorite identity when its contents change at the same path. Paths containing spaces and non-ASCII characters are supported.
+
+Equivalent commands:
+
+```sh
+~/.config/wallpaperengine/wallpaperctl folder-add "$HOME/Pictures/Wallpapers"
+~/.config/wallpaperengine/wallpaperctl folders
+~/.config/wallpaperengine/wallpaperctl folder-remove "$HOME/Pictures/Wallpapers"
+```
+
+Folders are persisted as a `local_folders` list in `~/.config/wallpaperengine/settings.json`. Other settings are preserved. No directory is imported automatically. A fresh local-only installation exposes the picker even when the library is empty.
 
 ## Steam library discovery
 
@@ -29,6 +47,7 @@ The controller discovers regular Steam locations, Flatpak Steam, and additional 
 
 ```json
 {
+  "local_folders": ["/path/to/Pictures/Wallpapers"],
   "steam_libraries": ["/path/to/SteamLibrary"],
   "transition": {
     "enabled": true,
@@ -38,7 +57,7 @@ The controller discovers regular Steam locations, Flatpak Steam, and additional 
 }
 ```
 
-Those paths are Steam library roots, **not arbitrary local wallpaper directories**. Local wallpaper import is not implemented. Existing downloaded items may remain browsable when subscription metadata is unavailable; an authoritative empty subscription list remains empty.
+`steam_libraries` contains Steam library roots; `local_folders` contains ordinary image folders. Existing downloaded items may remain browsable when subscription metadata is unavailable; an authoritative empty subscription list remains empty.
 
 ## Runtime commands
 

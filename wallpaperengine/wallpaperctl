@@ -41,7 +41,7 @@ def ensure_service(restart=False, ready=False):
     while time.monotonic() < deadline:
         try:
             status = call({"action": "status"})
-            if not (restart or ready) or (status.get("running") and not status.get("busy")):
+            if not (restart or ready) or ((status.get("running") or status.get("awaitingSelection") or not status.get("items")) and not status.get("busy")):
                 return status
             if status.get("error") and not status.get("busy"):
                 raise RuntimeError(status["error"])
@@ -96,7 +96,7 @@ def session():
             except (OSError, ValueError):
                 status = {}
             restart = (status.get("session") != signature or status.get("wayland_display") != display
-                       or (not status.get("running") and not status.get("busy")))
+                       or (bool(status.get("items")) and not status.get("awaitingSelection") and not status.get("running") and not status.get("busy")))
             record("restoring service" if restart else "service already belongs to this session")
             status = ensure_service(restart=restart, ready=True)
             record(f"renderer ready; service_pid={status.get('service_pid')}; display={display}")
@@ -115,7 +115,7 @@ def ui(rofi=False):
         data = call({"action": "list"})
         items = data["items"]
         choices = "\n".join(i["title"].replace("\n", " ")+"\0icon\x1f"+i["preview"] for i in items)
-        result = subprocess.run(["rofi", "-dmenu", "-i", "-show-icons", "-format", "i", "-p", "Steam Wallpapers"],
+        result = subprocess.run(["rofi", "-dmenu", "-i", "-show-icons", "-format", "i", "-p", "Wallpapers"],
                                 input=choices, capture_output=True, text=True)
         if result.returncode == 0 and result.stdout.strip().isdigit():
             call({"action": "apply", "id": items[int(result.stdout)]["id"]})
@@ -156,14 +156,17 @@ def ui(rofi=False):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Steam wallpapers and Caelestia colors")
+    parser = argparse.ArgumentParser(description="Local and Workshop wallpapers with Caelestia colors")
     parser.add_argument("action", choices=["serve", "session", "ui", "scan", "list", "status", "refresh",
                                            "apply", "restore", "next", "random", "favorite", "preview",
-                                           "theme-options", "recolor", "undo-theme"])
+                                           "theme-options", "recolor", "undo-theme", "folder-add", "folder-remove", "folders"])
     parser.add_argument("id", nargs="?")
     parser.add_argument("options", nargs="?")
     parser.add_argument("--rofi", action="store_true")
     args = parser.parse_args()
+    if args.action == "folders":
+        print(json.dumps(scan().get("folders", []), ensure_ascii=False))
+        return
     if args.action == "serve":
         from controller import serve
         serve()

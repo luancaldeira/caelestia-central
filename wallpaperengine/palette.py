@@ -13,7 +13,7 @@ VERSION = 2
 
 
 def crop(image, aspect, width=384):
-    return ImageOps.fit(image.convert("RGB"), (width, max(1, round(width / aspect))),
+    return ImageOps.fit(ImageOps.exif_transpose(image).convert("RGB"), (width, max(1, round(width / aspect))),
                         method=Image.Resampling.LANCZOS)
 
 
@@ -42,7 +42,7 @@ def representative(item, aspect, force=False):
                         frames.append(img.copy())
         except (OSError, ValueError, KeyError, subprocess.SubprocessError):
             pass
-    source = "video frames" if frames else "Workshop preview"
+    source = "video frames" if frames else "local image" if item.get("source") == "local" else "Workshop preview"
     if not frames:
         if not item["preview"]:
             raise ValueError("No usable image is available to generate this wallpaper palette.")
