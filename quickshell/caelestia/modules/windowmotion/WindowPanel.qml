@@ -47,6 +47,7 @@ Item {
     property double landingStartedAt: 0
     property bool awaitingPose: false
     property int finalPoseSwaps: 0
+    property bool awaitingDepartureFrame: false
     readonly property real nativeRadius: model?.goalRounding >= 0 ? model.goalRounding : Tokens.rounding.extraLarge
     // Decorated exports already carry the compositor's native corner mask.
     readonly property real clipRadius: model?.decorated ? 0 : nativeRadius+(Tokens.rounding.extraLarge-nativeRadius)*elasticity
@@ -84,8 +85,13 @@ Item {
     }
     function updateJoin() {
         if(!started) return;
-        if(model?.minimizing && gap<Math.max(2,smoothing*.6)) detached=false;
-        else if(!model?.minimizing && gap>Math.max(2,smoothing*.6)) detached=true;
+        const threshold=Math.max(2,smoothing*.6);
+        if(model?.minimizing) {
+            // Join the bottom edge as the window reaches it, then split the
+            // backing surface from the shell after its top clears the display.
+            if(gap<threshold) detached=false;
+            if(panel.y>screen.height+smoothing) detached=true;
+        } else if(gap>threshold) detached=true;
     }
     function complete() {
         if(finishing || retired || !model) return;
@@ -154,6 +160,7 @@ Item {
             atomicHandoff=false;
             awaitingPose=false;
             finalPoseSwaps=0;
+            awaitingDepartureFrame=false;
             landingStarted=false;
             landingStartedAt=0;
             landing.stop();
@@ -184,6 +191,14 @@ Item {
             else motionWindow.contentItem.Window.window?.update();
         }
     }
+    Connections {
+        target: root.Window.window
+        function onFrameSwapped() {
+            if(!root.awaitingDepartureFrame || !root.model?.minimizing || root.finishing) return;
+            root.awaitingDepartureFrame=false;
+            Qt.callLater(root.complete);
+        }
+    }
     FrameAnimation {
         id: frames
         property real nextCaptureAt: 1/30
@@ -205,8 +220,14 @@ Item {
             const atRest=Math.abs(m.m11-1)+Math.abs(m.m12)+Math.abs(m.m21)+Math.abs(m.m22-1)<.006;
             if(root.model.minimizing) {
                 if(!slide.running && Math.abs(root.offsetScale-root.destination)<.0001 && atRest) {
-                    root.detached=false;
-                    root.complete();
+                    // Render one shell frame with the departing backing
+                    // detached so the bottom SDF border is rebuilt before the
+                    // temporary surface is retired.
+                    root.detached=true;
+                    if(!root.awaitingDepartureFrame) {
+                        root.awaitingDepartureFrame=true;
+                        root.Window.window?.update();
+                    }
                 }
             } else {
                 if(!root.landingStarted && (root.detached || !slide.running) && elapsedTime*1000>=slide.duration*.65)
