@@ -149,7 +149,10 @@ Singleton {
             Connections {
                 target: previous.Window.window
                 function onFrameSwapped(): void {
-                    if (overlay.visible && previous.status === Image.Ready && splash.status === ShaderEffect.Compiled)
+                    // The prebuilt shader can draw correctly while Qt leaves
+                    // ShaderEffect.status at Uncompiled. A swapped frame plus
+                    // the loaded snapshot is the reliable readiness barrier.
+                    if (overlay.visible && previous.status === Image.Ready)
                         root.markReady(overlay.modelData.name);
                 }
             }
