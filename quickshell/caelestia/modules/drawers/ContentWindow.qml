@@ -36,10 +36,35 @@ StyledWindow {
         }
         return hasFullscreenOnNormalWs;
     }
+    readonly property var fullscreenCandidates: {
+        if (hasSpecialWorkspace) {
+            const specialName = monitor?.lastIpcObject.specialWorkspace?.name;
+            const specialWs = specialName ? Hypr.workspaces.values.find(ws => ws.name === specialName) : null;
+            return specialWs?.toplevels.values ?? [];
+        }
+        return monitor?.activeWorkspace?.toplevels.values ?? [];
+    }
+    function isMinimizingFullscreen(toplevel) {
+        const address = String(toplevel.address).replace(/^0x/, "").toLowerCase();
+        const pid = toplevel.lastIpcObject.pid;
+        for (let i = 0; i < WindowDrawer.motions.count; i++) {
+            const motion = WindowDrawer.motions.get(i);
+            if (motion.address === address && motion.pid === pid && motion.monitor === monitor?.id)
+                return motion.minimizing === true;
+        }
+        return false;
+    }
+    // Restore the shell outline during the window's flight. The native fullscreen
+    // client stays on its workspace until the flight ends, so waiting on
+    // hasFullscreen leaves the desktop expanded after the image has departed.
+    readonly property bool hasStationaryFullscreen: {
+        WindowDrawer.motionRevision;
+        return fullscreenCandidates.some(t => t.lastIpcObject.fullscreen > 1 && !isMinimizingFullscreen(t));
+    }
 
     readonly property bool windowHubActive: screenState.minimized && screenState.minimizedTab === 1
 
-    property real fsTransitionProg: hasFullscreen ? 1 : 0
+    property real fsTransitionProg: hasStationaryFullscreen ? 1 : 0
     readonly property real sdfBorderOffset: 2 * fsTransitionProg // SDFs joins are not exact, so offset by 2px to ensure nothing shows
     readonly property real borderThickness: contentItem.Config.border.thickness * (1 - fsTransitionProg)
     readonly property real borderRounding: contentItem.Config.border.rounding * (1 - fsTransitionProg)

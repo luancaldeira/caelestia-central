@@ -11,6 +11,7 @@ Singleton {
     readonly property alias motions: motions
     readonly property double generation: Date.now()
     property int completed: 0
+    property int motionRevision: 0
     property var panels: ({})
     property var recent: []
     // Opt-in live diagnostic: inspect the final exported frame before revealing
@@ -39,6 +40,7 @@ Singleton {
                         if(report) recent=recent.slice(-7).concat([Object.assign(report,{completedAt:Date.now()})]);
                     } catch(e) {}
                     motions.remove(index);
+                    motionRevision++;
                 }
                 return;
             }
@@ -55,6 +57,7 @@ Singleton {
             const current=indexOf(frame.address);
             if(current>=0) motions.set(current,values);
             else motions.append(Object.assign(values,{receivedAt:Date.now()}));
+            motionRevision++;
         } catch(e) { console.warn("WindowDrawer: invalid handoff",e); }
     }
     function claim(model) { dispatch("claim_drawer", [JSON.stringify(model.address),model.pid,model.token]); }
