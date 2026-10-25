@@ -289,7 +289,7 @@ StyledWindow {
                 Loader {
                     id: motionSurface
                     parent: surfaceLayer
-                    active: (drawer.priming || drawer.started) && !!drawer.model &&
+                    active: (drawer.priming || drawer.started) && !drawer.retired && !!drawer.model &&
                         (drawer.model.minimizing || drawer.backingOpacity>0)
                     sourceComponent: PanelBg {
                         panel: drawer.surface
