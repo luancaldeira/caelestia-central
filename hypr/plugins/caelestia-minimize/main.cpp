@@ -124,6 +124,18 @@ static bool startDrawer(PHLWINDOW w,bool minimizing) {
     if(!drawerAvailable || !w || !w->m_workspace || !w->m_workspace->isVisibleNotCovered() ||
        w->m_ruleApplicator->noAnim().valueOrDefault() || !w->positionAnimation()->enabled() || !w->sizeAnimation()->enabled()) return false;
     const auto key=reinterpret_cast<uintptr_t>(w.get());
+    if(!minimizing) {
+        // Restoring from the minimized workspace runs a second, independent
+        // alpha animation. The client is hidden by WINDOW_ALPHA_FADE while the
+        // drawer owns the image, so finish only that workspace handoff here.
+        // Otherwise native decorations such as hyprbars can fade in after the
+        // preview has completed its motion.
+        for(const auto type : {Desktop::View::WINDOW_ALPHA_MOVE_TO_WORKSPACE,
+                               Desktop::View::WINDOW_ALPHA_MOVE_FROM_WORKSPACE}) {
+            auto& alpha=w->alpha(type);
+            alpha->setValueAndWarp(alpha->goal());
+        }
+    }
     auto existing=drawerLeases.find(key);
     if(existing!=drawerLeases.end()) {
         auto& lease=existing->second;
@@ -708,7 +720,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     for (const auto& w : Desktop::windowState()->windows())
         observe(w);
     g_pEventManager->postEvent(SHyprIPCEvent{.event="caelestia_drawer_ready",.data="1"});
-    return {"caelestia-minimize", "Native window handoff for Caelestia drawers", "luancaldeira", "2.4"};
+    return {"caelestia-minimize", "Native window handoff for Caelestia drawers", "luancaldeira", "2.5"};
 }
 
 APICALL EXPORT void PLUGIN_EXIT() {

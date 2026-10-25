@@ -46,7 +46,9 @@ Item {
     property int finalPoseSwaps: 0
     readonly property real nativeRadius: model?.goalRounding >= 0 ? model.goalRounding : Tokens.rounding.extraLarge
     // Decorated exports already carry the compositor's exact corner mask.
-    readonly property real clipRadius: model?.decorated ? Tokens.rounding.extraLarge*elasticity : nativeRadius+(Tokens.rounding.extraLarge-nativeRadius)*elasticity
+    // Adding a second animated clip makes those captured edges grow transparent
+    // during the bounce, then change shape as the clip relaxes.
+    readonly property real clipRadius: model?.decorated ? 0 : nativeRadius+(Tokens.rounding.extraLarge-nativeRadius)*elasticity
     readonly property real backingOpacity: elasticity
     readonly property matrix4x4 imageTransform: Qt.matrix4x4(
         1+(deformation.m11-1)*elasticity,deformation.m12*elasticity,0,deformation.m14*elasticity,
