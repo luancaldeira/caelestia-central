@@ -134,6 +134,10 @@ static void finishDrawer(uintptr_t key,bool complete) {
         bool hidden=false;
         if(complete && lease.minimizing && w->m_workspace && w->m_workspace->m_name==lease.workspace) {
             fade->setValueAndWarp(0.F);
+            // The shell image is gone now; repaint the native window and its
+            // shadow at the old position so no compositor pixels are left behind.
+            g_pHyprRenderer->damageWindow(w,true);
+            if(const auto monitor=w->m_monitor.lock()) monitor->scheduleFrame();
             const auto selector=std::format("address:0x{:x}",key);
             const auto unpin=w->m_pinned ? std::format("hl.dispatch(hl.dsp.window.pin({{window=\"{}\",action=\"off\"}}));",selector) : "";
             HyprlandAPI::invokeHyprctlCommand("dispatch",std::format(
@@ -754,7 +758,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     for (const auto& w : Desktop::windowState()->windows())
         observe(w);
     g_pEventManager->postEvent(SHyprIPCEvent{.event="caelestia_drawer_ready",.data="1"});
-    return {"caelestia-minimize", "Native window handoff for Caelestia drawers", "luancaldeira", "2.8"};
+    return {"caelestia-minimize", "Native window handoff for Caelestia drawers", "luancaldeira", "2.9"};
 }
 
 APICALL EXPORT void PLUGIN_EXIT() {
