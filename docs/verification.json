@@ -698,6 +698,386 @@
     },
     "visualScope": "Real Kitty windows in the installed Wayland and X11 session, with 320x13-pixel private crops of the native title text on either side of handoff. This establishes title presence and placement for those cases; it does not certify every application or exclude every possible transient.",
     "screenRecordingUsed": false,
-    "mediaPublished": false
+    "mediaPublished": false,
+    "verificationScope": "Version 2.4 title-glyph checks only. These confirmed title presence but did not detect clipped surface edges or the misplaced Hyprbars background; they were not confirmation of the complete animation."
+  },
+  "captureEdgeHandoff": {
+    "nativePluginVersion": "2.6",
+    "verifiedOn": "2026-10-25",
+    "passed": true,
+    "cause": "Draw geometry was translated into the export buffer while surface damage intersections and decoration scissors retained desktop coordinates. Hyprbars also queued into the legacy global pass and ran after temporary capture state was restored.",
+    "fix": "Build and execute an isolated native render pass in capture-local coordinates, including the legacy global decoration queue. Restore the current render position, alpha and queue synchronously; preserve layout goals, client dimensions and original drawer easing.",
+    "before": {
+      "nativePluginVersion": "2.5",
+      "regressionFailedAsExpected": true,
+      "backend": "wayland",
+      "action": "open",
+      "meanColorError": {
+        "left": [
+          82.4493290960452,
+          54.97342867231639,
+          66.81532485875707
+        ],
+        "right": [
+          0.1896186440677966,
+          0.09110169491525423,
+          0.13012005649717515
+        ],
+        "bottomLeft": [
+          10.1278073286052,
+          3.6845449172576834,
+          4.456264775413712
+        ],
+        "bottomRight": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "titleBackground": [
+          2.415897435897436,
+          3.437692307692308,
+          2.6674358974358974
+        ],
+        "titleText": [
+          0.401875,
+          0.0,
+          0.0
+        ],
+        "topLeft": [
+          73.47265625,
+          40.78369140625,
+          48.81982421875
+        ],
+        "topRight": [
+          29.43310546875,
+          16.75439453125,
+          21.259765625
+        ]
+      },
+      "sourceSize": [
+        1814,
+        1024
+      ],
+      "maxFrameMs": 10.644459,
+      "handoffFallback": false
+    },
+    "cases": [
+      {
+        "backend": "wayland",
+        "action": "open",
+        "meanColorError": {
+          "left": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "right": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "bottomLeft": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "bottomRight": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "titleBackground": [
+            0.6197435897435898,
+            0.0,
+            0.0
+          ],
+          "titleText": [
+            0.401875,
+            0.0,
+            0.0
+          ],
+          "topLeft": [
+            0.1328125,
+            0.003662109375,
+            0.00048828125
+          ],
+          "topRight": [
+            0.152587890625,
+            0.002197265625,
+            0.001220703125
+          ]
+        },
+        "sourceSize": [
+          1814,
+          1024
+        ],
+        "maxFrameMs": 10.635161,
+        "handoffFallback": false
+      },
+      {
+        "backend": "wayland",
+        "action": "restore",
+        "meanColorError": {
+          "left": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "right": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "bottomLeft": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "bottomRight": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "titleBackground": [
+            0.6197435897435898,
+            0.0,
+            0.0
+          ],
+          "titleText": [
+            0.401875,
+            0.0,
+            0.0
+          ],
+          "topLeft": [
+            0.1328125,
+            0.003662109375,
+            0.00048828125
+          ],
+          "topRight": [
+            0.152587890625,
+            0.002197265625,
+            0.001220703125
+          ]
+        },
+        "sourceSize": [
+          1814,
+          1024
+        ],
+        "maxFrameMs": 10.722658,
+        "handoffFallback": false
+      },
+      {
+        "backend": "x11",
+        "action": "open",
+        "meanColorError": {
+          "left": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "right": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "bottomLeft": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "bottomRight": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "titleBackground": [
+            0.6197435897435898,
+            0.0,
+            0.0
+          ],
+          "titleText": [
+            0.401875,
+            0.0,
+            0.0
+          ],
+          "topLeft": [
+            1.6640625,
+            1.152099609375,
+            0.99853515625
+          ],
+          "topRight": [
+            0.152587890625,
+            0.002197265625,
+            0.001220703125
+          ]
+        },
+        "sourceSize": [
+          1814,
+          1024
+        ],
+        "maxFrameMs": 10.644402000000001,
+        "handoffFallback": false
+      },
+      {
+        "backend": "x11",
+        "action": "restore",
+        "meanColorError": {
+          "left": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "right": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "bottomLeft": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "bottomRight": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "titleBackground": [
+            0.6197435897435898,
+            0.0,
+            0.0
+          ],
+          "titleText": [
+            0.401875,
+            0.0,
+            0.0
+          ],
+          "topLeft": [
+            0.1328125,
+            0.003662109375,
+            0.00048828125
+          ],
+          "topRight": [
+            0.152587890625,
+            0.002197265625,
+            0.001220703125
+          ]
+        },
+        "sourceSize": [
+          1814,
+          1024
+        ],
+        "maxFrameMs": 10.855524,
+        "handoffFallback": false
+      }
+    ],
+    "titleGlyphCases": [
+      {
+        "backend": "wayland",
+        "action": "open",
+        "decorated": true,
+        "captureTop": 15,
+        "sourceSize": [
+          1814,
+          1024
+        ],
+        "imageSize": [
+          1814,
+          1024
+        ],
+        "titlePixelsBefore": 242,
+        "titlePixelsAfter": 242,
+        "meanColorError": [
+          0.38293269230769234,
+          0.0,
+          0.0
+        ],
+        "handoffFallback": false,
+        "maxFrameMs": 10.492186,
+        "meanFrameMs": 9.98946140625
+      },
+      {
+        "backend": "wayland",
+        "action": "restore",
+        "decorated": true,
+        "captureTop": 15,
+        "sourceSize": [
+          1814,
+          1024
+        ],
+        "imageSize": [
+          1814,
+          1024
+        ],
+        "titlePixelsBefore": 242,
+        "titlePixelsAfter": 242,
+        "meanColorError": [
+          0.38293269230769234,
+          0.0,
+          0.0
+        ],
+        "handoffFallback": false,
+        "maxFrameMs": 10.573512000000001,
+        "meanFrameMs": 10.003413499999995
+      },
+      {
+        "backend": "x11",
+        "action": "open",
+        "decorated": true,
+        "captureTop": 15,
+        "sourceSize": [
+          1814,
+          1024
+        ],
+        "imageSize": [
+          1814,
+          1024
+        ],
+        "titlePixelsBefore": 242,
+        "titlePixelsAfter": 242,
+        "meanColorError": [
+          0.38293269230769234,
+          0.0,
+          0.0
+        ],
+        "handoffFallback": false,
+        "maxFrameMs": 12.792937,
+        "meanFrameMs": 10.00357852173913
+      },
+      {
+        "backend": "x11",
+        "action": "restore",
+        "decorated": true,
+        "captureTop": 15,
+        "sourceSize": [
+          1814,
+          1024
+        ],
+        "imageSize": [
+          1814,
+          1024
+        ],
+        "titlePixelsBefore": 242,
+        "titlePixelsAfter": 242,
+        "meanColorError": [
+          0.38293269230769234,
+          0.0,
+          0.0
+        ],
+        "handoffFallback": false,
+        "maxFrameMs": 10.980556,
+        "meanFrameMs": 10.012587147058824
+      }
+    ],
+    "actualAppHubClick": true,
+    "actualMinimizedHubClick": true,
+    "mainEasingAndDurationUnchanged": true,
+    "contentRefreshLimitHz": 30,
+    "extraFramebuffersAdded": false,
+    "screenRecordingUsed": false,
+    "mediaPublished": false,
+    "scope": "One unrotated 1920x1080 monitor at scale 1, running at 100 Hz. Opaque Kitty fixtures were launched through temporary favorite icons and restored through the actual window hub on both Wayland and X11. Final exported/native stills compared exposed edge strips, both upper corners, title background and text. The still-open hub foreground was excluded from the bottom-center sample. Temporary test windows, desktop entries, favorites, captures and focus/cursor changes were cleaned up.",
+    "limitation": "These fixed-pose comparisons verify the reproduced clipping defect and handoff for the tested cases. They do not establish visual behavior for every application, layout or monitor, or replace the desktop owner's evaluation of the complete animation.",
+    "desktopOwnerConfirmation": "Not yet received for version 2.6."
   }
 }

@@ -13,6 +13,9 @@ Singleton {
     property int completed: 0
     property var panels: ({})
     property var recent: []
+    // Opt-in live diagnostic: inspect the final exported frame before revealing
+    // the native client. The compositor's lease timeout still restores it.
+    property bool holdHandoff: false
     signal presented(var frame)
 
     ListModel { id: motions; dynamicRoles: true }
@@ -82,6 +85,7 @@ Singleton {
     Component.onDestruction: dispatch("enable_drawer", ["false",generation])
     IpcHandler {
         target: "windowdrawer"
+        function hold(enabled: bool): void { root.holdHandoff=enabled; }
         function reload(): void { Quickshell.reload(false); }
         function info(): string {
             const result=[];

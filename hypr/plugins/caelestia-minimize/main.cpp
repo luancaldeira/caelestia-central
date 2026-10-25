@@ -720,7 +720,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     for (const auto& w : Desktop::windowState()->windows())
         observe(w);
     g_pEventManager->postEvent(SHyprIPCEvent{.event="caelestia_drawer_ready",.data="1"});
-    return {"caelestia-minimize", "Native window handoff for Caelestia drawers", "luancaldeira", "2.5"};
+    return {"caelestia-minimize", "Native window handoff for Caelestia drawers", "luancaldeira", "2.6"};
 }
 
 APICALL EXPORT void PLUGIN_EXIT() {

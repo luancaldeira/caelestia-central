@@ -45,9 +45,7 @@ Item {
     property bool awaitingPose: false
     property int finalPoseSwaps: 0
     readonly property real nativeRadius: model?.goalRounding >= 0 ? model.goalRounding : Tokens.rounding.extraLarge
-    // Decorated exports already carry the compositor's exact corner mask.
-    // Adding a second animated clip makes those captured edges grow transparent
-    // during the bounce, then change shape as the clip relaxes.
+    // Decorated exports already carry the compositor's native corner mask.
     readonly property real clipRadius: model?.decorated ? 0 : nativeRadius+(Tokens.rounding.extraLarge-nativeRadius)*elasticity
     readonly property real backingOpacity: elasticity
     readonly property matrix4x4 imageTransform: Qt.matrix4x4(
@@ -86,6 +84,7 @@ Item {
     }
     function complete() {
         if(finishing || retired || !model) return;
+        if(!model.minimizing && WindowDrawer.holdHandoff) return;
         frames.stop();
         finishing=true;
         settledAt=Date.now();
@@ -134,7 +133,7 @@ Item {
             handoffFallback:handoffFallback,finishing:finishing,retired:retired,
             elasticity:elasticity,landingStartedAt:landingStartedAt,landingDuration:landing.duration,
             imageTransform:[imageTransform.m11,imageTransform.m12,imageTransform.m21,imageTransform.m22,imageTransform.m14,imageTransform.m24],
-            edgeErrorPx:edgeError(),clipRadius:clipRadius,nativeRadius:nativeRadius,finalPoseSwaps:finalPoseSwaps};
+            edgeErrorPx:edgeError(),clipRadius:clipRadius,nativeRadius:nativeRadius,awaitingPose:awaitingPose,finalPoseSwaps:finalPoseSwaps};
     }
     onGapChanged: updateJoin()
     onDestinationChanged: {

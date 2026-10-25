@@ -2,7 +2,6 @@
 
 #include <hyprland/src/managers/screenshare/ScreenshareManager.hpp>
 #include <hyprland/src/render/decorations/IHyprWindowDecoration.hpp>
-#include <hyprland/src/render/pass/RendererHintsPassElement.hpp>
 
 // Hyprland's standard toplevel export intentionally omits server decorations.
 // Opt in only the owning shell's short-lived drawer captures. Other screencopy
@@ -96,25 +95,42 @@ static void renderWindow(CScreenshareFrame* frame) {
     renderer.m_renderData.transformDamage = false;
     renderer.setViewport(0, 0, size.x, size.y);
 
-    // The desktop lease remains masked. Temporarily unmask only while building
-    // this offscreen pass, so native text, buttons, rounding and opacity are
-    // captured with the client. No monitor render can run inside this call.
+    // Build AND execute this private pass in capture-local coordinates. A render
+    // hint only translates drawing: surface damage and decoration scissors keep
+    // their desktop coordinates, leaving transparent strips at the top/left.
+    // Restore the current pose before returning; layout goals and client size
+    // never change and no monitor render can interleave with this call.
     auto& fade = w->alpha(Desktop::View::WINDOW_ALPHA_FADE)->value();
+    auto& position = w->positionAnimation()->value();
     const auto savedFade = fade;
+    const auto savedPosition = position;
     const auto savedSnapshot = renderer.m_bRenderingSnapshot;
     const auto savedFeedback = renderer.m_bBlockSurfaceFeedback;
-    fade = found->second.fade;
-    renderer.m_bRenderingSnapshot = true;
+    const auto savedNoSimplify = renderer.m_renderData.noSimplify;
+    const auto savedModif = renderer.m_renderData.renderModif;
+    Hyprutils::Utils::CScopeGuard restore{[&] {
+        position = savedPosition;
+        fade = savedFade;
+        renderer.m_bBlockSurfaceFeedback = savedFeedback;
+        renderer.m_bRenderingSnapshot = savedSnapshot;
+        renderer.m_renderData.noSimplify = savedNoSimplify;
+        renderer.m_renderData.renderModif = savedModif;
+    }};
     renderer.m_bBlockSurfaceFeedback = renderer.shouldRenderWindow(w);
-    Render::SRenderModifData translation;
-    const auto offset = (monitor->m_position - found->second.box.pos()) * monitor->m_scale;
-    translation.modifs.emplace_back(Render::SRenderModifData::RMOD_TYPE_TRANSLATE, offset);
-    renderer.addPassElement(makeUnique<CRendererHintsPassElement>(CRendererHintsPassElement::SData{translation}));
+    fade = found->second.fade;
+    position += monitor->m_position - found->second.box.pos();
+    renderer.m_bRenderingSnapshot = true;
+    renderer.m_renderData.noSimplify = true;
+    renderer.m_renderData.renderModif = {};
+    // Some decoration plugins (including this Hyprbars version) append directly
+    // to m_renderPass instead of currentPass(). Isolate that queue as well, so
+    // they execute inside this scope rather than after the pose is restored.
+    auto parentPass = std::move(renderer.m_renderPass);
+    renderer.m_renderPass = {};
+    Hyprutils::Utils::CScopeGuard restorePass{[&] { renderer.m_renderPass = std::move(parentPass); }};
+    auto redirect = renderer.redirectPass(&renderer.m_renderPass);
     (renderer.*&RendererAccess::renderWindow)(w, monitor, Time::steadyNow(), true, Render::RENDER_PASS_ALL, false, false);
-    renderer.addPassElement(makeUnique<CRendererHintsPassElement>(CRendererHintsPassElement::SData{Render::SRenderModifData{}}));
-    renderer.m_bBlockSurfaceFeedback = savedFeedback;
-    renderer.m_bRenderingSnapshot = savedSnapshot;
-    fade = savedFade;
+    renderer.m_renderPass.render(CRegion{CBox{{}, size}});
 }
 
 static void attach(HANDLE handle) {

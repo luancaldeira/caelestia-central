@@ -43,11 +43,15 @@ assert not any(c['workspace']['name']=='918' or c['class']==klass for c in clien
 def frame():return next((f for f in info()['active'] if f['address']==owned['address'][2:]),None)
 def last(token):return next((f for f in info()['recent'] if f['address']==owned['address'][2:] and f['token']==token),None)
 def check(action):
- f=wait(lambda:(f if (f:=frame()) and f['started'] else None),'motion missing');token=f['token'];time.sleep(max(0,(f['startedAt']+470-time.time()*1000)/1000))
+ # Compare the same final pose on both sides of the handoff. A timed sample at
+ # 470ms can still be between pixels during bounce, changing glyph brightness.
+ f=wait(lambda:(f if (f:=frame()) and f['started'] and f.get('awaitingPose') and f['finalPoseSwaps']>=2 else None),'final pose missing');token=f['token']
  f=frame();assert f and f['decorated'] and f['captureTop']>0 and not f['nativeFrameAt'],f
  x=round(f['x']+f['width']/2-160);y=round(f['y']+1);roi=f'{x},{y} 320x13'
  imageBefore=base/f'titlebar-{backend}-{action}-before.png';imageAfter=base/f'titlebar-{backend}-{action}-after.png'
  run('grim','-g',roi,str(imageBefore))
+ assert frame() and not frame()['releaseRequestedAt'],'native lease expired before capture'
+ shell('windowdrawer','hold','false')
  done=wait(lambda:last(token),'did not finish');time.sleep(.08);run('grim','-g',roi,str(imageAfter))
  a=Image.open(imageBefore).convert('RGB');b=Image.open(imageAfter).convert('RGB')
  # Bright glyphs must be present while the native client is still masked.
@@ -61,6 +65,7 @@ def check(action):
  assert done['edgeErrorPx']==0 and done['elasticity']==0 and not done['handoffFallback'],done
 try:
  run('hyprctl','dispatch','hl.dsp.focus({workspace="918"})');time.sleep(.6)
+ shell('windowdrawer','hold','true')
  cmd=shlex.join(['kitty','-o','linux_display_server='+backend,'--class',klass,'--title','Caelestia titlebar continuity'])
  run('hyprctl','dispatch','function() hl.plugin.caelestia_minimize.prepare_launch('+json.dumps(klass)+',900,1030,48,48,""); hl.dispatch(hl.dsp.exec_cmd('+json.dumps(cmd)+')) end')
  owned=wait(lambda:next((c for c in clients() if c['class']==klass),None),'fixture missing');check('open')
@@ -72,8 +77,9 @@ try:
    if hub().get('selected')==owned['address'][2:]:break
    shell('minimized',method)
   if hub().get('selected')==owned['address'][2:]:break
- assert hub()['selected']==owned['address'][2:];o=hub()['origin'];click(o['x']+o['width']/2,o['y']+o['height']/2);check('restore')
+ assert hub()['selected']==owned['address'][2:];o=hub()['origin'];shell('windowdrawer','hold','true');click(o['x']+o['width']/2,o['y']+o['height']/2);check('restore')
 finally:
+ shell('windowdrawer','hold','false')
  if owned and any(c['address']==owned['address'] and c['pid']==owned['pid'] for c in clients()):run('hyprctl','dispatch','hl.dsp.window.close({window='+json.dumps('address:'+owned['address'])+'})')
  if hub()['open']:shell('minimized','toggle')
  if active.get('address'):run('hyprctl','dispatch','hl.dsp.focus({window='+json.dumps('address:'+active['address'])+'})')
