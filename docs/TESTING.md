@@ -67,6 +67,19 @@ python3 tests/desktop/verify_drawer_edges.py --live --backend x11
 
 This test requires the pointer helper above, Kitty, Pillow, grim, and one unrotated 1920×1080 monitor at scale 1. Optional `--artifacts /private/path` retains only side-by-side corner crops. Results go to ignored `test-results/edges-wayland.json` and `test-results/edges-x11.json`. Passing this fixed-pose comparison verifies the exported/native handoff in those cases; it does not replace visual evaluation of every app, layout or monitor configuration.
 
+## Populated application content and native shadows
+
+Empty and constant-color clients do not verify application-content readiness. The regression below clicks a temporary Dolphin favorite that opens the actual `/usr/share/applications` directory. It checks populated text/icons, native shadow margins and an atomic native handoff. Restoration uses a smaller floating window so all four shadow sides are exposed. The default holds the final exported pose for a pixel comparison against the native client; `--normal-speed` instead samples real content and exposed shadow strips from 250 to 800 ms without changing the motion. In that mode, continuity assertions apply after the landing envelope completes. Pixels covered by the shell's bar/border are excluded from the shadow samples.
+
+```sh
+python3 tests/desktop/verify_drawer_content.py --live --backend wayland --floating
+python3 tests/desktop/verify_drawer_content.py --live --backend x11 --floating
+python3 tests/desktop/verify_drawer_content.py --live --backend wayland --floating --normal-speed
+python3 tests/desktop/verify_drawer_content.py --live --backend x11 --floating --normal-speed
+```
+
+Requirements are the same single-monitor desktop and pointer helper as above, plus Dolphin. Only the temporary file-manager window is resized, minimized and closed. The original client set, minimized entries, favorites, workspace, focus and pointer are preserved. Uncompressed temporary stills avoid a video encoder; optional `--artifacts /private/path` retains only directory-content/shadow crops for visual review. Numeric results are saved under ignored `test-results/content-*.json`. No captured desktop media is published.
+
 ## Visual demonstrations
 
 Recordings and visual demonstrations are deferred. The current release contains no captured desktop media. Verification is documented through automated tests, the native regression, and the sanitized results in `docs/verification.json`.

@@ -3,6 +3,7 @@
 #include <hyprland/src/output/Monitor.hpp>
 #include <hyprland/src/config/shared/animation/AnimationTree.hpp>
 #include <hyprland/src/desktop/view/Window.hpp>
+#include <hyprland/src/desktop/view/LayerSurface.hpp>
 #include <hyprland/src/desktop/Workspace.hpp>
 #include <hyprland/src/desktop/state/WindowState.hpp>
 #include <hyprland/src/protocols/XDGShell.hpp>
@@ -72,6 +73,7 @@ struct DrawerLease {
     bool claimed = false;
     bool released = false;
     bool presented = false;
+    bool atomicHandoff = false;
     uint64_t releaseId = 0;
 };
 static std::unordered_map<uintptr_t, DrawerLease> drawerLeases;
@@ -82,18 +84,39 @@ static PHLWINDOW luaWindow(lua_State* L);
 
 #include "DrawerCapture.hpp"
 
+// A separate, input-transparent image surface lets the compositor replace it
+// with the native client in one frame. Waiting for IPC acknowledgment before
+// removing an image inside the shared shell surface composites translucent
+// decorations twice for the intervening frames.
+static PHLLS drawerImage(uintptr_t key, const DrawerLease& lease) {
+    const auto window=lease.window.lock();
+    const auto monitor=window ? window->m_monitor.lock() : nullptr;
+    if(!monitor) return nullptr;
+    const auto name=std::format("caelestia-drawer-image-{:x}-{}",key,lease.token);
+    for(const auto& layer:monitor->m_layerSurfaceLayers)
+        for(const auto& reference:layer) {
+            const auto surface=reference.lock();
+            if(surface && surface->m_mapped && surface->m_namespace==name && surface->getPID()==DrawerCapture::shellPid)
+                return surface;
+        }
+    return nullptr;
+}
+
 static void drawerEvent(uintptr_t key, const DrawerLease& lease, bool done = false) {
     const auto w=lease.window.lock();
     const auto monitor=w ? w->m_monitor.lock() : nullptr;
     const auto rounding=w && Fullscreen::controller()->getFullscreenModes(w).internal!=Fullscreen::FSMODE_FULLSCREEN ? w->rounding() : 0.F;
     const auto captured=w && DrawerCapture::enabled() ? DrawerCapture::geometry(w) : CBox{lease.goalPosition,lease.goalSize};
+    const auto solid=w && DrawerCapture::enabled() ? DrawerCapture::solidGeometry(w) : captured;
+    const auto shadowLeading=solid.pos()-captured.pos();
+    const auto shadowTrailing=captured.size()-solid.size()-shadowLeading;
     const auto leading=lease.goalPosition-captured.pos();
     const auto trailing=captured.size()-lease.goalSize-leading;
     g_pEventManager->postEvent(SHyprIPCEvent{.event="caelestia_drawer",.data=std::format(
-        R"({{"address":"{:x}","pid":{},"token":{},"monitor":{},"x":{:.3f},"y":{:.3f},"width":{:.3f},"height":{:.3f},"rounding":{:.3f},"captureLeft":{:.3f},"captureTop":{:.3f},"captureRight":{:.3f},"captureBottom":{:.3f},"decorated":{},"minimizing":{},"done":{}}})",
+        R"({{"address":"{:x}","pid":{},"token":{},"monitor":{},"x":{:.3f},"y":{:.3f},"width":{:.3f},"height":{:.3f},"rounding":{:.3f},"captureLeft":{:.3f},"captureTop":{:.3f},"captureRight":{:.3f},"captureBottom":{:.3f},"shadowLeft":{:.3f},"shadowTop":{:.3f},"shadowRight":{:.3f},"shadowBottom":{:.3f},"decorated":{},"minimizing":{},"done":{}}})",
         key,w ? w->getPID() : 0,lease.token,monitor ? static_cast<int>(monitor->m_id) : -1,
         lease.goalPosition.x,lease.goalPosition.y,lease.goalSize.x,lease.goalSize.y,rounding,
-        leading.x,leading.y,trailing.x,trailing.y,DrawerCapture::enabled() ? "true" : "false",
+        leading.x,leading.y,trailing.x,trailing.y,shadowLeading.x,shadowLeading.y,shadowTrailing.x,shadowTrailing.y,DrawerCapture::enabled() ? "true" : "false",
         lease.minimizing ? "true" : "false",done ? "true" : "false")});
 }
 
@@ -101,6 +124,10 @@ static void finishDrawer(uintptr_t key,bool complete) {
     auto node=drawerLeases.extract(key);
     if(node.empty()) return;
     auto& lease=node.mapped();
+    if(const auto image=drawerImage(key,lease)) {
+        image->alpha()[Desktop::View::LS_ALPHA_FADE]->setValueAndWarp(0.F);
+        g_pHyprRenderer->damageBox(image->m_geometry);
+    }
     const auto w=lease.window.lock();
     if(w && w->m_isMapped) {
         auto& fade=w->alpha(Desktop::View::WINDOW_ALPHA_FADE);
@@ -142,6 +169,7 @@ static bool startDrawer(PHLWINDOW w,bool minimizing) {
         lease.minimizing=minimizing;
         lease.released=false;
         lease.presented=false;
+        lease.atomicHandoff=false;
         lease.releaseId=0;
         w->alpha(Desktop::View::WINDOW_ALPHA_FADE)->setValueAndWarp(0.F);
         lease.started=Time::steadyNow();
@@ -189,6 +217,8 @@ static int claimDrawer(lua_State* L) {
     const auto valid=it!=drawerLeases.end() && lua_isinteger(L,3) && it->second.token==static_cast<uint64_t>(lua_tointeger(L,3));
     if(valid) {
         it->second.claimed=true;
+        if(const auto image=drawerImage(it->first,it->second))
+            image->alpha()[Desktop::View::LS_ALPHA_FADE]->setValueAndWarp(1.F);
         w->alpha(Desktop::View::WINDOW_ALPHA_FADE)->setValueAndWarp(0.F);
     }
     lua_pushboolean(L,valid);
@@ -203,10 +233,14 @@ static int releaseDrawer(lua_State* L) {
         it->second.released=true;
         it->second.presented=false;
         it->second.releaseId=lua_isinteger(L,4) ? static_cast<uint64_t>(lua_tointeger(L,4)) : 0;
+        if(const auto image=drawerImage(it->first,it->second)) {
+            image->alpha()[Desktop::View::LS_ALPHA_FADE]->setValueAndWarp(0.F);
+            g_pHyprRenderer->damageBox(image->m_geometry);
+            it->second.atomicHandoff=true;
+        }
         w->alpha(Desktop::View::WINDOW_ALPHA_FADE)->setValueAndWarp(it->second.fadeGoal);
-        // Keep the shell image intact until a normal monitor render has
-        // composed the real window underneath it. Toplevel exports do not
-        // emit RENDER_POST, so refreshing that image cannot satisfy this fence.
+        // Hide the companion image and reveal the native client in this same
+        // compositor transaction. The subsequent fence only retires QML state.
         if(!drawerRendered) drawerRendered=Event::bus()->m_events.render.stage.listen([](eRenderStage stage) {
             if(stage==RENDER_BEGIN) drawerRenderingMonitor=g_pHyprRenderer->m_renderData.pMonitor;
             if(stage!=RENDER_POST) return;
@@ -219,7 +253,7 @@ static int releaseDrawer(lua_State* L) {
                 if(!lease.released || lease.presented || !window || window->m_monitor.lock()!=monitor) continue;
                 lease.presented=true;
                 g_pEventManager->postEvent(SHyprIPCEvent{.event="caelestia_drawer_presented",.data=std::format(
-                    R"({{"address":"{:x}","pid":{},"token":{},"releaseId":{}}})",key,window->getPID(),lease.token,lease.releaseId)});
+                    R"({{"address":"{:x}","pid":{},"token":{},"releaseId":{},"atomic":{}}})",key,window->getPID(),lease.token,lease.releaseId,lease.atomicHandoff ? "true" : "false")});
             }
         });
         g_pHyprRenderer->damageWindow(w,true);
@@ -720,7 +754,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     for (const auto& w : Desktop::windowState()->windows())
         observe(w);
     g_pEventManager->postEvent(SHyprIPCEvent{.event="caelestia_drawer_ready",.data="1"});
-    return {"caelestia-minimize", "Native window handoff for Caelestia drawers", "luancaldeira", "2.6"};
+    return {"caelestia-minimize", "Native window handoff for Caelestia drawers", "luancaldeira", "2.8"};
 }
 
 APICALL EXPORT void PLUGIN_EXIT() {

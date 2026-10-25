@@ -1,6 +1,6 @@
 {
-  "date": "2026-10-24",
-  "nativePluginVersion": "2.4",
+  "date": "2026-10-25",
+  "nativePluginVersion": "2.8",
   "environment": {
     "hyprland": "0.56.2",
     "caelestiaShell": "2.3.0",
@@ -1079,5 +1079,653 @@
     "scope": "One unrotated 1920x1080 monitor at scale 1, running at 100 Hz. Opaque Kitty fixtures were launched through temporary favorite icons and restored through the actual window hub on both Wayland and X11. Final exported/native stills compared exposed edge strips, both upper corners, title background and text. The still-open hub foreground was excluded from the bottom-center sample. Temporary test windows, desktop entries, favorites, captures and focus/cursor changes were cleaned up.",
     "limitation": "These fixed-pose comparisons verify the reproduced clipping defect and handoff for the tested cases. They do not establish visual behavior for every application, layout or monitor, or replace the desktop owner's evaluation of the complete animation.",
     "desktopOwnerConfirmation": "Not yet received for version 2.6."
+  },
+  "populatedContentAndShadows": {
+    "nativePluginVersion": "2.8",
+    "passed": true,
+    "application": "Dolphin",
+    "content": "Actual /usr/share/applications directory with text and loaded application icons.",
+    "cases": {
+      "wayland-fixed": {
+        "app": "Dolphin",
+        "floatingRestore": true,
+        "backend": "wayland",
+        "normalSpeed": false,
+        "passed": true,
+        "cases": {
+          "open": {
+            "meanColorError": {
+              "left": [
+                0.24361559139784947,
+                0.013440860215053764,
+                0.03225806451612903
+              ],
+              "right": [
+                0.1976646505376344,
+                0.10013440860215053,
+                0.2109375
+              ],
+              "bottomLeft": [
+                0.2642241379310345,
+                0.01192528735632184,
+                0.01867816091954023
+              ],
+              "bottomRight": [
+                0.1831612162937464,
+                0.06267928858290304,
+                0.03399311531841653
+              ],
+              "titleBackground": [
+                0.36025641025641025,
+                0.0460552268244576,
+                0.05414201183431953
+              ],
+              "titleText": [
+                0.37892628205128204,
+                0.03309294871794872,
+                0.07684294871794872
+              ],
+              "topLeft": [
+                0.2080078125,
+                0.024658203125,
+                0.029541015625
+              ],
+              "topRight": [
+                0.252197265625,
+                0.0625,
+                0.03662109375
+              ],
+              "shadowLeft": [
+                0.35932849702380953,
+                0.06161644345238095,
+                0.1052827380952381
+              ],
+              "shadowRight": [
+                6.117559523809524,
+                5.320126488095238,
+                3.7116815476190474
+              ],
+              "shadowTop": [
+                0.3906435349940688,
+                0.07621589561091341,
+                0.11002372479240807
+              ],
+              "shadowBottomLeft": [
+                0.3836936090225564,
+                0.07229010025062657,
+                0.1118421052631579
+              ],
+              "shadowBottomRight": [
+                0.3027673545966229,
+                0.10279862414008756,
+                0.12468730456535335
+              ],
+              "content": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "sourceSize": [
+              1862,
+              1072
+            ],
+            "maxFrameMs": 10.991703000000001,
+            "handoffFallback": false
+          },
+          "restore": {
+            "meanColorError": {
+              "left": [
+                0.20960406634563938,
+                0.019127875869448904,
+                0.03290529695024077
+              ],
+              "right": [
+                0.20853397538790797,
+                0.009229534510433388,
+                0.047084002140181914
+              ],
+              "bottomLeft": [
+                0.13063063063063063,
+                0.019425675675675675,
+                0.04054054054054054
+              ],
+              "bottomRight": [
+                0.11570945945945946,
+                0.05518018018018018,
+                0.12865990990990991
+              ],
+              "titleBackground": [
+                0.36814595660749505,
+                0.03057199211045365,
+                0.08422090729783037
+              ],
+              "titleText": [
+                0.3470352564102564,
+                0.03854166666666667,
+                0.09423076923076923
+              ],
+              "topLeft": [
+                0.189453125,
+                0.021240234375,
+                0.0712890625
+              ],
+              "topRight": [
+                0.1806640625,
+                0.019287109375,
+                0.04150390625
+              ],
+              "shadowLeft": [
+                0.25980392156862747,
+                0.07384566729917774,
+                0.13108791903858316
+              ],
+              "shadowRight": [
+                0.2590923466160658,
+                0.055977229601518026,
+                0.14057558507273876
+              ],
+              "shadowTop": [
+                0.2976262019230769,
+                0.056239983974358976,
+                0.12845552884615385
+              ],
+              "shadowBottomLeft": [
+                0.18867607526881722,
+                0.09324596774193548,
+                0.16330645161290322
+              ],
+              "shadowBottomRight": [
+                0.22043010752688172,
+                0.45161290322580644,
+                0.9855510752688172
+              ],
+              "content": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "sourceSize": [
+              1008,
+              703
+            ],
+            "maxFrameMs": 10.693375999999999,
+            "handoffFallback": false
+          }
+        }
+      },
+      "wayland-normal": {
+        "app": "Dolphin",
+        "floatingRestore": true,
+        "backend": "wayland",
+        "normalSpeed": true,
+        "passed": true,
+        "cases": {
+          "open": {
+            "meanColorError": {
+              "left": [
+                0.2972222222222222,
+                0.015277777777777777,
+                0.006944444444444444
+              ],
+              "right": [
+                0.30416666666666664,
+                0.059722222222222225,
+                0.03333333333333333
+              ],
+              "topLeft": [
+                0.209716796875,
+                0.028076171875,
+                0.03173828125
+              ],
+              "topRight": [
+                0.25634765625,
+                0.07080078125,
+                0.040771484375
+              ],
+              "titleBackground": [
+                0.36025641025641025,
+                0.0460552268244576,
+                0.05414201183431953
+              ],
+              "titleText": [
+                0.37892628205128204,
+                0.03309294871794872,
+                0.07684294871794872
+              ],
+              "shadowLeft": [
+                0.5861928104575164,
+                0.10702614379084967,
+                0.1454248366013072
+              ],
+              "shadowRight": [
+                0.8382352941176471,
+                0.24183006535947713,
+                0.2824754901960784
+              ],
+              "shadowTop": [
+                0.5208580466587585,
+                0.10162119414788454,
+                0.14669829972321075
+              ],
+              "content": [
+                0.01760752688172043,
+                0.01760752688172043,
+                0.01726478494623656
+              ]
+            },
+            "samples": 27,
+            "exportedSampleMs": [
+              497.974365234375,
+              517.7724609375
+            ],
+            "nativeAtMs": 541,
+            "maxFrameMs": 10.80007,
+            "peakLandingColorError": 0.43300653594771243,
+            "atomicHandoff": true,
+            "durationMs": 541,
+            "handoffFallback": false
+          },
+          "restore": {
+            "meanColorError": {
+              "left": [
+                0.2222222222222222,
+                0.004166666666666667,
+                0.075
+              ],
+              "right": [
+                0.2972222222222222,
+                0.018055555555555554,
+                0.016666666666666666
+              ],
+              "topLeft": [
+                0.189453125,
+                0.021240234375,
+                0.0712890625
+              ],
+              "topRight": [
+                0.1806640625,
+                0.019287109375,
+                0.04150390625
+              ],
+              "titleBackground": [
+                0.36814595660749505,
+                0.03057199211045365,
+                0.08422090729783037
+              ],
+              "titleText": [
+                0.3470352564102564,
+                0.03854166666666667,
+                0.09423076923076923
+              ],
+              "shadowLeft": [
+                0.24831495098039216,
+                0.07199754901960784,
+                0.12990196078431374
+              ],
+              "shadowRight": [
+                0.2887561274509804,
+                0.050551470588235295,
+                0.15042892156862744
+              ],
+              "shadowTop": [
+                0.2976262019230769,
+                0.056239983974358976,
+                0.12845552884615385
+              ],
+              "content": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "samples": 31,
+            "exportedSampleMs": [
+              499.31396484375,
+              519.162109375
+            ],
+            "nativeAtMs": 537,
+            "maxFrameMs": 10.776404,
+            "peakLandingColorError": 0.2976262019230769,
+            "atomicHandoff": true,
+            "durationMs": 537,
+            "handoffFallback": false
+          }
+        }
+      },
+      "x11-fixed": {
+        "app": "Dolphin",
+        "floatingRestore": true,
+        "backend": "x11",
+        "normalSpeed": false,
+        "passed": true,
+        "cases": {
+          "open": {
+            "meanColorError": {
+              "left": [
+                0.24361559139784947,
+                0.013440860215053764,
+                0.03225806451612903
+              ],
+              "right": [
+                0.21118951612903225,
+                0.016549059139784945,
+                0.036710349462365593
+              ],
+              "bottomLeft": [
+                0.2642241379310345,
+                0.01192528735632184,
+                0.01867816091954023
+              ],
+              "bottomRight": [
+                0.1831612162937464,
+                0.06267928858290304,
+                0.03399311531841653
+              ],
+              "titleBackground": [
+                0.36025641025641025,
+                0.0460552268244576,
+                0.05414201183431953
+              ],
+              "titleText": [
+                0.37892628205128204,
+                0.03309294871794872,
+                0.07684294871794872
+              ],
+              "topLeft": [
+                0.2080078125,
+                0.024658203125,
+                0.029541015625
+              ],
+              "topRight": [
+                0.252197265625,
+                0.0625,
+                0.03662109375
+              ],
+              "shadowLeft": [
+                0.35932849702380953,
+                0.06161644345238095,
+                0.1052827380952381
+              ],
+              "shadowRight": [
+                0.3171968005952381,
+                0.07180059523809523,
+                0.11253720238095238
+              ],
+              "shadowTop": [
+                0.3906435349940688,
+                0.07621589561091341,
+                0.11002372479240807
+              ],
+              "shadowBottomLeft": [
+                0.3836936090225564,
+                0.07229010025062657,
+                0.1118421052631579
+              ],
+              "shadowBottomRight": [
+                0.3027673545966229,
+                0.10279862414008756,
+                0.12468730456535335
+              ],
+              "content": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "sourceSize": [
+              1862,
+              1072
+            ],
+            "shadowPadding": [
+              24,
+              24,
+              24,
+              24
+            ],
+            "maxFrameMs": 10.68381,
+            "handoffFallback": false
+          },
+          "restore": {
+            "meanColorError": {
+              "left": [
+                0.20960406634563938,
+                0.019127875869448904,
+                0.03290529695024077
+              ],
+              "right": [
+                0.20853397538790797,
+                0.009229534510433388,
+                0.047084002140181914
+              ],
+              "bottomLeft": [
+                0.13063063063063063,
+                0.019425675675675675,
+                0.04054054054054054
+              ],
+              "bottomRight": [
+                0.11570945945945946,
+                0.05518018018018018,
+                0.12865990990990991
+              ],
+              "titleBackground": [
+                0.36814595660749505,
+                0.03057199211045365,
+                0.08422090729783037
+              ],
+              "titleText": [
+                0.3470352564102564,
+                0.03854166666666667,
+                0.09423076923076923
+              ],
+              "topLeft": [
+                0.189453125,
+                0.021240234375,
+                0.0712890625
+              ],
+              "topRight": [
+                0.1806640625,
+                0.019287109375,
+                0.04150390625
+              ],
+              "shadowLeft": [
+                0.25980392156862747,
+                0.07384566729917774,
+                0.13108791903858316
+              ],
+              "shadowRight": [
+                0.2590923466160658,
+                0.055977229601518026,
+                0.14057558507273876
+              ],
+              "shadowTop": [
+                0.2976262019230769,
+                0.056239983974358976,
+                0.12845552884615385
+              ],
+              "shadowBottomLeft": [
+                0.18665994623655913,
+                0.09223790322580645,
+                0.16213037634408603
+              ],
+              "shadowBottomRight": [
+                0.21841397849462366,
+                0.45077284946236557,
+                0.9845430107526881
+              ],
+              "content": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "sourceSize": [
+              1008,
+              703
+            ],
+            "shadowPadding": [
+              24,
+              24,
+              24,
+              24
+            ],
+            "maxFrameMs": 10.959646,
+            "handoffFallback": false
+          }
+        }
+      },
+      "x11-normal": {
+        "app": "Dolphin",
+        "floatingRestore": true,
+        "backend": "x11",
+        "normalSpeed": true,
+        "passed": true,
+        "cases": {
+          "open": {
+            "meanColorError": {
+              "left": [
+                0.2972222222222222,
+                0.015277777777777777,
+                0.006944444444444444
+              ],
+              "right": [
+                0.2125,
+                0.058333333333333334,
+                0.03333333333333333
+              ],
+              "topLeft": [
+                0.927978515625,
+                0.62451171875,
+                0.61474609375
+              ],
+              "topRight": [
+                1.728759765625,
+                1.50537109375,
+                1.42822265625
+              ],
+              "titleBackground": [
+                1.2928994082840237,
+                0.9520710059171598,
+                0.913905325443787
+              ],
+              "titleText": [
+                1.4907051282051282,
+                1.3315705128205129,
+                1.3850160256410255
+              ],
+              "shadowLeft": [
+                1.7377450980392157,
+                1.1627859477124183,
+                1.1491013071895424
+              ],
+              "shadowRight": [
+                1.4803921568627452,
+                0.926062091503268,
+                0.9969362745098039
+              ],
+              "shadowTop": [
+                0.8590022406748385,
+                0.23345854751548703,
+                0.22373797284829314
+              ],
+              "content": [
+                1.8534475806451614,
+                1.8581787634408602,
+                1.8807862903225807
+              ]
+            },
+            "samples": 33,
+            "exportedSampleMs": [
+              480.311279296875,
+              500.040771484375
+            ],
+            "nativeAtMs": 539,
+            "maxFrameMs": 10.646519999999999,
+            "peakLandingColorError": 0.5120506535947712,
+            "atomicHandoff": true,
+            "durationMs": 539,
+            "handoffFallback": false
+          },
+          "restore": {
+            "meanColorError": {
+              "left": [
+                0.2222222222222222,
+                0.004166666666666667,
+                0.075
+              ],
+              "right": [
+                0.3055555555555556,
+                0.018055555555555554,
+                0.016666666666666666
+              ],
+              "topLeft": [
+                0.24462890625,
+                0.021240234375,
+                0.0712890625
+              ],
+              "topRight": [
+                0.3955078125,
+                0.019287109375,
+                0.04150390625
+              ],
+              "titleBackground": [
+                0.4685404339250493,
+                0.03057199211045365,
+                0.08422090729783037
+              ],
+              "titleText": [
+                0.38846153846153847,
+                0.03854166666666667,
+                0.09423076923076923
+              ],
+              "shadowLeft": [
+                0.42984068627450983,
+                0.19424019607843138,
+                0.19623161764705882
+              ],
+              "shadowRight": [
+                0.3085171568627451,
+                0.050551470588235295,
+                0.15042892156862744
+              ],
+              "shadowTop": [
+                0.37094350961538464,
+                0.056239983974358976,
+                0.12845552884615385
+              ],
+              "content": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "samples": 30,
+            "exportedSampleMs": [
+              498.616455078125,
+              518.60986328125
+            ],
+            "nativeAtMs": 539,
+            "maxFrameMs": 10.605061000000001,
+            "peakLandingColorError": 0.19102328431372548,
+            "atomicHandoff": true,
+            "durationMs": 539,
+            "handoffFallback": false
+          }
+        }
+      }
+    },
+    "changes": [
+      "Native shadow range, scale and offset are included in the exported frame.",
+      "Shadow decoration caches follow capture-local coordinates and are restored afterward.",
+      "Shadow padding is separate from the solid drawer body and deformation pivot.",
+      "The auxiliary blob fades through item opacity; the blob shader ignores color alpha.",
+      "Masked clients receive capture feedback so content can paint before the native handoff.",
+      "The input-transparent client-image layer and native window exchange visibility atomically."
+    ],
+    "scope": "One 1920x1080 scale-1 monitor at 100 Hz. Actual app-hub launches and minimized-hub restores on Wayland and X11. The restored Dolphin window was floated at 960x640 to expose all four shadow margins. Fixed comparisons cover the full native shadow and populated content; normal-speed samples cover the real landing and exposed shadow strips. Temporary windows, favorites, desktop entries, focus and cursor changes were cleaned up.",
+    "motionDurationAndEasingUnchanged": true,
+    "videoRecorderUsed": false,
+    "capturedMediaPublished": false
   }
 }

@@ -2,6 +2,8 @@
 
 #include <hyprland/src/managers/screenshare/ScreenshareManager.hpp>
 #include <hyprland/src/render/decorations/IHyprWindowDecoration.hpp>
+#include <hyprland/src/render/decorations/CHyprDropShadowDecoration.hpp>
+#include <hyprland/src/config/ConfigValue.hpp>
 
 // Hyprland's standard toplevel export intentionally omits server decorations.
 // Opt in only the owning shell's short-lived drawer captures. Other screencopy
@@ -39,14 +41,13 @@ struct RendererAccess : Render::IHyprRenderer { using IHyprRenderer::renderWindo
 
 static bool enabled() { return nextHook && renderHook && shellPid > 0; }
 
-static CBox geometry(PHLWINDOW w) {
+static CBox solidGeometry(PHLWINDOW w) {
     CBox box = w->geometricBox(Desktop::View::IGeometric::GEOMETRIC_CURRENT);
     if (w->m_X11DoesntWantBorders || !w->m_ruleApplicator->decorate().valueOrDefault() ||
         Fullscreen::controller()->getFullscreenModes(w).internal == Fullscreen::FSMODE_FULLSCREEN)
         return box;
     box = g_pDecorationPositioner->getBoxWithIncludedDecos(w);
-    // Include native title bars even when configured outside the main surface,
-    // and borders, but leave soft shadows outside the moving content frame.
+    // The drawer's solid surface excludes the soft shadow margin.
     for (const auto& deco : w->m_windowDecorations) {
         if ((deco->getDecorationFlags() & DECORATION_NON_SOLID) || deco->getDecorationType() == DECORATION_SHADOW) continue;
         const auto part = g_pDecorationPositioner->getWindowDecorationBox(deco.get());
@@ -57,6 +58,27 @@ static CBox geometry(PHLWINDOW w) {
         box = {left, top, right - left, bottom - top};
     }
     return box;
+}
+
+static CBox geometry(PHLWINDOW w) {
+    auto box=solidGeometry(w);
+    if(w->m_X11DoesntWantBorders || !w->m_ruleApplicator->decorate().valueOrDefault() ||
+       w->m_ruleApplicator->noShadow().valueOrDefault() ||
+       Fullscreen::controller()->getFullscreenModes(w).internal==Fullscreen::FSMODE_FULLSCREEN)
+        return box;
+    static auto enabled=CConfigValue<Config::INTEGER>("decoration:shadow:enabled");
+    static auto range=CConfigValue<Config::INTEGER>("decoration:shadow:range");
+    static auto scale=CConfigValue<Config::FLOAT>("decoration:shadow:scale");
+    static auto offset=CConfigValue<Config::VEC2>("decoration:shadow:offset");
+    if(!*enabled) return box;
+    // Use the compositor's shadow footprint even before the first decoration
+    // render has populated its extents. Buffer negotiation and the drawer event
+    // must agree from the first frame, including asynchronous app startup.
+    auto shadow=g_pDecorationPositioner->getBoxWithIncludedDecos(w);
+    shadow.expand(*range).scaleFromCenter(std::clamp(*scale,0.F,1.F)).translate({(*offset).x,(*offset).y}).expand(2);
+    const auto left=std::min(box.x,shadow.x),top=std::min(box.y,shadow.y);
+    const auto right=std::max(box.x+box.w,shadow.x+shadow.w),bottom=std::max(box.y+box.h,shadow.y+shadow.h);
+    return {left,top,right-left,bottom-top};
 }
 
 static UP<CScreenshareFrame> nextFrame(CScreenshareSession* session, bool cursor) {
@@ -110,15 +132,25 @@ static void renderWindow(CScreenshareFrame* frame) {
     const auto savedModif = renderer.m_renderData.renderModif;
     Hyprutils::Utils::CScopeGuard restore{[&] {
         position = savedPosition;
+        for(const auto& decoration:w->m_windowDecorations)
+            if(decoration->getDecorationType()==DECORATION_SHADOW) decoration->updateWindow(w);
         fade = savedFade;
         renderer.m_bBlockSurfaceFeedback = savedFeedback;
         renderer.m_bRenderingSnapshot = savedSnapshot;
         renderer.m_renderData.noSimplify = savedNoSimplify;
         renderer.m_renderData.renderModif = savedModif;
     }};
-    renderer.m_bBlockSurfaceFeedback = renderer.shouldRenderWindow(w);
+    // Workspace visibility does not mean the native client is being drawn:
+    // the drawer deliberately masks it at fade=0. Its capture must then send
+    // presentation/frame feedback, or Qt/GTK clients stop painting and reveal
+    // their pending content only after the native handoff.
+    renderer.m_bBlockSurfaceFeedback = savedFade > 0.F && renderer.shouldRenderWindow(w);
     fade = found->second.fade;
     position += monitor->m_position - found->second.box.pos();
+    // Native shadows cache their box independently of the animated position.
+    // Refresh that cache in the same local space, then restore it above.
+    for(const auto& decoration:w->m_windowDecorations)
+        if(decoration->getDecorationType()==DECORATION_SHADOW) decoration->updateWindow(w);
     renderer.m_bRenderingSnapshot = true;
     renderer.m_renderData.noSimplify = true;
     renderer.m_renderData.renderModif = {};

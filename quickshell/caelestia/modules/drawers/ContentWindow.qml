@@ -289,10 +289,12 @@ StyledWindow {
                 Loader {
                     id: motionSurface
                     parent: surfaceLayer
-                    active: (drawer.priming || drawer.started) && !!drawer.model
+                    active: (drawer.priming || drawer.started) && !!drawer.model &&
+                        (drawer.model.minimizing || drawer.backingOpacity>0)
                     sourceComponent: PanelBg {
-                        panel: drawer.panel
+                        panel: drawer.surface
                         deformAmount: .1
+                        // Blob materials use the item's opacity, not color.a.
                         opacity: drawer.backingOpacity
                         group: drawer.detached ? releasedGroup : blobGroup
                     }

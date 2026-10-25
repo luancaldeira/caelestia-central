@@ -6,6 +6,7 @@ import Quickshell
 import Quickshell.Wayland
 import Caelestia.Config
 import qs.components
+import qs.components.containers
 import qs.services
 
 Item {
@@ -19,6 +20,7 @@ Item {
     width: screen.width
     height: screen.height
     readonly property alias panel: panel
+    readonly property alias surface: surface
     readonly property var client: Hypr.toplevels.values.find(t=>Minimized.address(t.address)===model?.address && t.lastIpcObject.pid===model?.pid) ?? null
     property string identity: ""
     property bool started: false
@@ -38,6 +40,7 @@ Item {
     property double releaseRequestedAt: 0
     property double nativeFrameAt: 0
     property bool handoffFallback: false
+    property bool atomicHandoff: false
     property bool retired: false
     property real elasticity: 1
     property bool landingStarted: false
@@ -49,22 +52,24 @@ Item {
     readonly property real clipRadius: model?.decorated ? 0 : nativeRadius+(Tokens.rounding.extraLarge-nativeRadius)*elasticity
     readonly property real backingOpacity: elasticity
     readonly property matrix4x4 imageTransform: Qt.matrix4x4(
-        1+(deformation.m11-1)*elasticity,deformation.m12*elasticity,0,deformation.m14*elasticity,
-        deformation.m21*elasticity,1+(deformation.m22-1)*elasticity,0,deformation.m24*elasticity,
+        1+(deformation.m11-1)*elasticity,deformation.m12*elasticity,0,
+            (deformation.m14+(1-deformation.m11)*(model?.shadowLeft ?? 0)-deformation.m12*(model?.shadowTop ?? 0))*elasticity,
+        deformation.m21*elasticity,1+(deformation.m22-1)*elasticity,0,
+            (deformation.m24-deformation.m21*(model?.shadowLeft ?? 0)+(1-deformation.m22)*(model?.shadowTop ?? 0))*elasticity,
         0,0,1,0, 0,0,0,1)
     readonly property real destination: model?.minimizing ? 1 : 0
     // Clear the entire SDF join before removing a departing surface. Five
     // pixels outside the content clip still contribute to the border's blob.
     readonly property real distance: screen.height-borderThickness+2*smoothing+5-((model?.goalY ?? screen.y)-(model?.captureTop ?? 0)-screen.y)
-    readonly property real gap: screen.height-2*borderThickness-panel.y-panel.height/2-
-        (Math.abs(deformation.m21)*panel.width+Math.abs(deformation.m22)*panel.height)/2
+    readonly property real gap: screen.height-2*borderThickness-surface.y-surface.height/2-
+        (Math.abs(deformation.m21)*surface.width+Math.abs(deformation.m22)*surface.height)/2
 
     function prime() {
         if(!model || started || priming || finishing || !capture.hasContent || !client) return;
         priming=true;
         imageReadyAt=Date.now();
         primedSwaps=0;
-        root.Window.window?.update();
+        motionWindow.contentItem.Window.window?.update();
     }
     function start() {
         if(!model || started || finishing || primedSwaps<2 || !capture.hasContent || !client) return;
@@ -123,6 +128,8 @@ Item {
         if(!model) return null;
         return {address:model.address,pid:model.pid,token:model.token,minimizing:model.minimizing,
             decorated:model.decorated,captureTop:model.captureTop,hasContent:capture.hasContent,sourceWidth:capture.sourceSize.width,sourceHeight:capture.sourceSize.height,
+            shadowPadding:[model.shadowLeft,model.shadowTop,model.shadowRight,model.shadowBottom],
+            clipBounds:[leftInset,borderThickness,screen.width-borderThickness,screen.height-borderThickness],
             offset:offsetScale,detached:detached,started:started,animating:slide.running,
             x:panel.x+leftInset,y:panel.y+borderThickness,width:panel.width,height:panel.height,gap:gap,
             deform:[deformation.m11,deformation.m12,deformation.m21,deformation.m22],
@@ -130,7 +137,7 @@ Item {
             frameCount:frameCount,maxFrameMs:maxFrameMs,meanFrameMs:frameCount ? totalFrameMs/frameCount : 0,
             contentRefreshes:contentRefreshes,imageReadyAt:imageReadyAt,primedSwaps:primedSwaps,
             releaseRequestedAt:releaseRequestedAt,nativeFrameAt:nativeFrameAt,
-            handoffFallback:handoffFallback,finishing:finishing,retired:retired,
+            handoffFallback:handoffFallback,atomicHandoff:atomicHandoff,finishing:finishing,retired:retired,
             elasticity:elasticity,landingStartedAt:landingStartedAt,landingDuration:landing.duration,
             imageTransform:[imageTransform.m11,imageTransform.m12,imageTransform.m21,imageTransform.m22,imageTransform.m14,imageTransform.m24],
             edgeErrorPx:edgeError(),clipRadius:clipRadius,nativeRadius:nativeRadius,awaitingPose:awaitingPose,finalPoseSwaps:finalPoseSwaps};
@@ -144,6 +151,7 @@ Item {
             releaseRequestedAt=0;
             nativeFrameAt=0;
             handoffFallback=false;
+            atomicHandoff=false;
             awaitingPose=false;
             finalPoseSwaps=0;
             landingStarted=false;
@@ -159,13 +167,13 @@ Item {
     }
     Behavior on offsetScale { enabled: root.started; Anim { id: slide } }
     Connections {
-        target: root.Window.window
+        target: motionWindow.contentItem.Window.window
         function onFrameSwapped() {
             if(!root.model) return;
             if(root.awaitingPose && !root.finishing) {
                 root.finalPoseSwaps++;
                 if(root.finalPoseSwaps>=2) Qt.callLater(root.complete);
-                else root.Window.window?.update();
+                else motionWindow.contentItem.Window.window?.update();
                 return;
             }
             if(!root.priming || root.started || root.finishing) return;
@@ -173,7 +181,7 @@ Item {
             // ready. The next one contains our texture and shared background.
             root.primedSwaps++;
             if(root.primedSwaps>=2) Qt.callLater(root.start);
-            else root.Window.window?.update();
+            else motionWindow.contentItem.Window.window?.update();
         }
     }
     FrameAnimation {
@@ -206,21 +214,17 @@ Item {
                 if(!slide.running && root.elasticity===0 && !landing.running && !root.awaitingPose) {
                     root.awaitingPose=true;
                     root.finalPoseSwaps=0;
-                    root.Window.window?.update();
+                    motionWindow.contentItem.Window.window?.update();
                 }
             }
         }
         onRunningChanged: if(running) nextCaptureAt=1/30
     }
 
-    // The same reserved frame and clipping as the existing drawer content.
-    // Client pixels stay inside the border while its shared surface deforms.
+    // This geometry stays in the shared drawer tree for PanelBg's deformation.
     Item {
         x: root.leftInset
         y: root.borderThickness
-        width: root.width-root.leftInset-root.borderThickness
-        height: root.height-2*root.borderThickness
-        clip: true
         Item {
             id: panel
             x: (root.model?.goalX ?? 0)-(root.model?.captureLeft ?? 0)-root.screen.x-root.leftInset
@@ -228,17 +232,51 @@ Item {
             width: (root.model?.goalWidth ?? 0)+(root.model?.captureLeft ?? 0)+(root.model?.captureRight ?? 0)
             height: (root.model?.goalHeight ?? 0)+(root.model?.captureTop ?? 0)+(root.model?.captureBottom ?? 0)
             opacity: (root.priming || root.started) ? 1 : 0
-            transform: Matrix4x4 { matrix: root.imageTransform }
-            StyledClippingRect {
-                anchors.fill: parent
-                radius: root.clipRadius
-                ScreencopyView {
-                    id: capture
+        }
+        Item {
+            id: surface
+            x: panel.x+(root.model?.shadowLeft ?? 0)
+            y: panel.y+(root.model?.shadowTop ?? 0)
+            width: panel.width-(root.model?.shadowLeft ?? 0)-(root.model?.shadowRight ?? 0)
+            height: panel.height-(root.model?.shadowTop ?? 0)-(root.model?.shadowBottom ?? 0)
+        }
+    }
+
+    StyledWindow {
+        id: motionWindow
+        name: "drawer-image-" + (root.model?.address ?? "none") + "-" + (root.model?.token ?? 0)
+        screen: root.screen
+        visible: !!root.model && !root.retired
+        anchors { top: true; bottom: true; left: true; right: true }
+        exclusionMode: ExclusionMode.Ignore
+        WlrLayershell.layer: WlrLayer.Overlay
+        WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+        mask: Region {}
+
+        Item {
+            x: root.leftInset
+            y: root.borderThickness
+            width: root.width-root.leftInset-root.borderThickness
+            height: root.height-2*root.borderThickness
+            clip: true
+            Item {
+                x: panel.x
+                y: panel.y
+                width: panel.width
+                height: panel.height
+                opacity: panel.opacity
+                transform: Matrix4x4 { matrix: root.imageTransform }
+                StyledClippingRect {
                     anchors.fill: parent
-                    captureSource: root.client?.wayland ?? null
-                    live: false
-                    paintCursor: false
-                    onHasContentChanged: if(hasContent) Qt.callLater(root.prime)
+                    radius: root.clipRadius
+                    ScreencopyView {
+                        id: capture
+                        anchors.fill: parent
+                        captureSource: root.client?.wayland ?? null
+                        live: false
+                        paintCursor: false
+                        onHasContentChanged: if(hasContent) Qt.callLater(root.prime)
+                    }
                 }
             }
         }
@@ -253,10 +291,15 @@ Item {
 
     Connections {
         target: WindowDrawer
+        function onHoldHandoffChanged() {
+            if(!WindowDrawer.holdHandoff && root.awaitingPose && root.finalPoseSwaps>=2)
+                root.complete();
+        }
         function onPresented(frame) {
             if(!root.finishing || root.model?.minimizing || frame.address!==root.model?.address ||
                frame.pid!==root.model.pid || frame.token!==root.model.token || frame.releaseId!==root.releaseRequestedAt) return;
             root.nativeFrameAt=Date.now();
+            root.atomicHandoff=frame.atomic===true;
             root.retire();
         }
     }

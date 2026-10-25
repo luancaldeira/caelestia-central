@@ -48,7 +48,9 @@ Singleton {
                 goalX:frame.x,goalY:frame.y,goalWidth:frame.width,goalHeight:frame.height,minimizing:frame.minimizing,
                 goalRounding:Number.isFinite(frame.rounding) ? Math.max(0,frame.rounding) : -1,
                 decorated:frame.decorated===true,captureLeft:frame.captureLeft ?? 0,captureTop:frame.captureTop ?? 0,
-                captureRight:frame.captureRight ?? 0,captureBottom:frame.captureBottom ?? 0};
+                captureRight:frame.captureRight ?? 0,captureBottom:frame.captureBottom ?? 0,
+                shadowLeft:frame.shadowLeft ?? 0,shadowTop:frame.shadowTop ?? 0,
+                shadowRight:frame.shadowRight ?? 0,shadowBottom:frame.shadowBottom ?? 0};
             if(index>=0 && motions.get(index).token!==frame.token) motions.remove(index);
             const current=indexOf(frame.address);
             if(current>=0) motions.set(current,values);
