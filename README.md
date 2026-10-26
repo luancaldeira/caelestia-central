@@ -4,6 +4,10 @@ A compact bottom-edge hub for favorite apps, minimized windows, and local or Ste
 
 [Installation](docs/INSTALLATION.md) · [Architecture](docs/ARCHITECTURE.md)
 
+## Demo
+
+[▶ Watch the 53-second demo (MP4)](./2026-10-26%20aparado.mp4)
+
 ## What it does
 
 - Hover over the bottom center to reveal a small row of favorite application icons.
